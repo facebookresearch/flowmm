@@ -2,8 +2,8 @@
 
 <div align="center">
 
-[![arxiv](https://img.shields.io/badge/arxiv-blue)](https://arxiv.org/pdf/2406.04713)
-[![twitter](https://img.shields.io/badge/twitter-thread-green)]() <!-- TODO -->
+[![arxiv](https://img.shields.io/badge/arxiv-blue)](https://arxiv.org/abs/2406.04713)
+[![twitter](https://img.shields.io/badge/twitter-thread-green)](https://twitter.com/bkmi13/status/1803038219790942565)
 
 </div>
 
