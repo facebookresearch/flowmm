@@ -1,0 +1,5 @@
+defaults:
+  - simplex_params
+
+manifold_getter:
+  lattice_manifold: lattice_params_normal_base

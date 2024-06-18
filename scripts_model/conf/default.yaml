@@ -1,0 +1,97 @@
+# metadata specialised for each experiment
+core:
+  version: ${get_flowmm_version:}
+  tags:
+    - ${now:%Y-%m-%d}
+
+logging:
+  # log frequency
+  val_check_interval: 5
+  wandb:
+    project: rfmcsp-${model.target_distribution}-${hydra:runtime.choices.data}
+    entity: null
+    log_model: True
+    mode: 'online'
+    group: ${hydra:runtime.choices.model}-${hydra:runtime.choices.vectorfield}-${generate_id:}
+
+  wandb_watch:
+    log: all
+    log_freq: 500
+
+  lr_monitor:
+    logging_interval: step
+    log_momentum: False
+
+optim:
+  # RFM
+  optimizer:
+    _target_: torch.optim.AdamW
+    lr: 0.0003
+    weight_decay: 0.0
+  lr_scheduler:
+    _target_: torch.optim.lr_scheduler.CosineAnnealingLR
+    T_max: ${data.train_max_epochs}
+    eta_min: 1e-5
+  interval: epoch
+  ema_decay: 0.999
+
+train:
+  # reproducibility
+  deterministic: warn
+  random_seed: 42
+
+  # training
+  pl_trainer:
+    fast_dev_run: False # Enable this for debug purposes
+    # strategy: ddp
+    # devices: auto
+    devices: 1
+    accelerator: gpu
+    precision: 32
+    # max_steps: 10000
+    max_epochs: ${data.train_max_epochs}
+    accumulate_grad_batches: 1
+    num_sanity_val_steps: 1
+    gradient_clip_val: 0.5
+    gradient_clip_algorithm: value
+    profiler: simple
+
+  monitor_metric: "val/loss"  # "val/nll"
+  monitor_metric_mode: min
+
+  # early_stopping:
+  #   patience: ${data.early_stopping_patience}
+  #   verbose: False
+
+  model_checkpoints:
+    save_top_k: 1
+    verbose: False
+    save_last: False
+
+  every_n_epochs_checkpoint:
+    every_n_epochs: 100
+    save_top_k: -1
+    verbose: False
+    save_last: False
+
+val:
+  compute_nll: false
+
+test:
+  compute_nll: false
+  compute_loss: true
+
+integrate:
+  div_mode: rademacher  # "exact" is an alternative
+  method: euler
+  num_steps: 1_000
+  normalize_loglik: True  # this is normalized by dimension
+  inference_anneal_slope: 0.0
+  inference_anneal_offset: 0.0
+
+defaults:
+  - _self_
+  - data: perov
+  - model: null_nonsym
+  - vectorfield: rfm_cspnet
+  - hydra: trash

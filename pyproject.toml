@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/flowmm/_version.py"
+
+[tool.hatch.metadata.hooks.vcs]
+
+[project]
+name = "flowmm"
+authors = [
+  { name = "Benjamin Kurt Miller"},
+]
+description = "code for 'FlowMM: Generating Materials with Riemannian Flow Matching'."
+readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dynamic = ["version"]
+
+[project.urls]
+"Homepage" = "https://github.com/facebookresearch/flowmm"
+
+[tool.black]
+line-length = 88
+extend-exclude = ["remote"]
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+skip_gitignore = true
+line_length = 88
+known_first_party = ["cdvae", "diffcsp", "manifm"]

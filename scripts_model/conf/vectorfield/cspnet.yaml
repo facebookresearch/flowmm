@@ -1,0 +1,19 @@
+_target_: flowmm.model.arch.CSPNet
+hidden_dim: 512
+time_dim: 256
+num_layers: 6
+act_fn: silu
+dis_emb: sin
+num_freqs: 128
+edge_style: fc
+max_neighbors: 20
+cutoff: 7.
+ln: true
+use_log_map: false  # false would put it in line with DiffCSP (euclidean distance function)
+dim_atomic_rep: ${get_dim_atomic_rep:${model.manifold_getter.atom_type_manifold}}
+lattice_manifold: ${model.manifold_getter.lattice_manifold}
+concat_sum_pool: false
+represent_num_atoms: false
+represent_angle_edge_to_lattice: false
+self_edges: true  # weird, but this is what diffcsp does!
+self_cond: ${model.self_cond}

@@ -1,0 +1,2 @@
+run:
+  dir: ./runs/trash/${now:%Y-%m-%d}/${now:%H-%M-%S}/${hydra:runtime.choices.model}-${hydra:runtime.choices.vectorfield}-${generate_id:}

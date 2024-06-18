@@ -1,0 +1,14 @@
+cost_coord: 400.
+cost_lattice: 1.
+cost_type: 40.
+cost_cross_ent: 0.0
+affine_combine_costs: true
+target_distribution: unconditional
+self_cond: false
+
+manifold_getter:
+  atom_type_manifold: analog_bits
+  coord_manifold: flat_torus_01
+  lattice_manifold: lattice_params
+  analog_bits_scale: 1.0
+  length_inner_coef: 1.0
