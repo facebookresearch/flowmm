@@ -350,7 +350,8 @@ class CSPNet(DiffCSPNet):
                 frac_diff = frac_coords[fc_edges[1]] - frac_coords[fc_edges[0]]
             return fc_edges, frac_diff
         elif self.edge_style == "knn":
-            lattice_nodes = lattices[node2graph]
+            _lattices = self._convert_lin_to_lattice(lattices)
+            lattice_nodes = _lattices[node2graph]
             cart_coords = torch.einsum("bi,bij->bj", frac_coords, lattice_nodes)
 
             edge_index, to_jimages, num_bonds = radius_graph_pbc(
@@ -361,7 +362,7 @@ class CSPNet(DiffCSPNet):
                 self.cutoff,
                 self.max_neighbors,
                 device=num_atoms.device,
-                lattices=lattices,
+                lattices=_lattices,
             )
 
             j_index, i_index = edge_index
