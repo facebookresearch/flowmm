@@ -17,6 +17,7 @@ from flowmm.old_eval.core import (
 
 COV_Cutoffs = {
     "mp20": {"struc": 0.4, "comp": 10.0},
+    "mp20_llama": {"struc": 0.4, "comp": 10.0},
     "carbon": {"struc": 0.2, "comp": 4.0},
     "perovskite": {"struc": 0.2, "comp": 4},
 }
