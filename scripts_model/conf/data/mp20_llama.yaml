@@ -1,0 +1,83 @@
+dataset_name: mp_20_llama
+dim_coords: 3
+root_path: ${oc.env:PROJECT_ROOT}/data/mp_20_llama
+prop: formation_energy_per_atom
+num_targets: 1
+# prop: scaled_lattice
+# num_targets: 6
+niggli: true
+primitive: False
+graph_method: crystalnn
+lattice_scale_method: scale_length
+preprocess_workers: 30
+readout: mean
+max_atoms: 20
+otf_graph: false
+eval_model_name: mp_20_llama
+tolerance: 0.1
+
+use_space_group: false
+use_pos_index: false
+train_max_epochs: 20
+early_stopping_patience: 100000
+teacher_forcing_max_epoch: 5
+
+
+datamodule:
+  _target_: diffcsp.pl_data.datamodule.CrystDataModule
+
+  datasets:
+    train:
+      _target_: diffcsp.pl_data.dataset.CrystDataset
+      name: Formation energy train
+      path: ${data.root_path}/train.csv
+      save_path: ${data.root_path}/train_ori.pt
+      prop: ${data.prop}
+      niggli: ${data.niggli}
+      primitive: ${data.primitive}
+      graph_method: ${data.graph_method}
+      tolerance: ${data.tolerance}
+      use_space_group: ${data.use_space_group}
+      use_pos_index: ${data.use_pos_index}
+      lattice_scale_method: ${data.lattice_scale_method}
+      preprocess_workers: ${data.preprocess_workers}
+
+    val:
+      - _target_: diffcsp.pl_data.dataset.CrystDataset
+        name: Formation energy val
+        path: ${data.root_path}/val.csv
+        save_path: ${data.root_path}/val_ori.pt
+        prop: ${data.prop}
+        niggli: ${data.niggli}
+        primitive: ${data.primitive}
+        graph_method: ${data.graph_method}
+        tolerance: ${data.tolerance}
+        use_space_group: ${data.use_space_group}
+        use_pos_index: ${data.use_pos_index}
+        lattice_scale_method: ${data.lattice_scale_method}
+        preprocess_workers: ${data.preprocess_workers}
+
+    test:
+      - _target_: diffcsp.pl_data.dataset.CrystDataset
+        name: Formation energy test
+        path: ${data.root_path}/test.csv
+        save_path: ${data.root_path}/test_ori.pt
+        prop: ${data.prop}
+        niggli: ${data.niggli}
+        primitive: ${data.primitive}
+        graph_method: ${data.graph_method}
+        tolerance: ${data.tolerance}
+        use_space_group: ${data.use_space_group}
+        use_pos_index: ${data.use_pos_index}
+        lattice_scale_method: ${data.lattice_scale_method}
+        preprocess_workers: ${data.preprocess_workers}
+
+  num_workers:
+    train: 5
+    val: 5
+    test: 5
+
+  batch_size:
+    train: 128
+    val: 1024
+    test: 512

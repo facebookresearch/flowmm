@@ -213,9 +213,23 @@ sun_json=sun.json
 python scripts_analysis/novelty.py "${eval_for_dft_json}" "${sun_json}" --ehulls "${ehulls_corrected_json}"
 ```
 
+# FlowLLM Model
+
+The FlowLLM model combines RFM and [CrystalLLM](https://arxiv.org/abs/2402.04379) by using the LLM as a learned base distribution for the RFM model.
+
+To train the FlowLLM from scratch, you need to train the CrystalLLM model first: Get the CrystalLLM codebase from [https://github.com/facebookresearch/crystal-text-llm](https://github.com/facebookresearch/crystal-text-llm). Follow the instructions in that repo to fine-tune a LLaMA model on the MP-20 dataset. After training, generate a large number of samples from that model and create a dataset to train the RFM model. 
+For convenience, a subset of the data used in the FlowLLM paper is available in: `data/mp20_llama/`.
+
+Once this training data has been created, the FlowLLM model can be trained just like FlowMM with Conditional Training. Be sure to set `base_distribution_from_data=True` to read the initial samples from the dataset file.
+
+```bash
+python scripts_model/run.py data=mp20_llama model=null_params base_distribution_from_data=True
+```
+
+
 # Citation
 
-If you find this repository helpful for your publications, please consider citing our paper:
+If you find this repository helpful for your publications, please consider citing our papers:
 
 ```
 @inproceedings{
@@ -225,6 +239,15 @@ If you find this repository helpful for your publications, please consider citin
     booktitle={Forty-first International Conference on Machine Learning},
     year={2024},
     url={https://openreview.net/forum?id=W4pB7VbzZI}
+}
+
+@inproceedings{
+    sriram2024flowllm,
+    title={FlowLLM: Flow Matching for Material Generation with Large Language Models as Base Distributions},
+    author={Anuroop Sriram and Benjamin Kurt Miller and Ricky T. Q. Chen and Brandon M. Wood},
+    booktitle={NeurIPS 2024},
+    year={2024},
+    url={}
 }
 ```
 
