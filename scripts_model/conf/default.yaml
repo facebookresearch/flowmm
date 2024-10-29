@@ -95,3 +95,5 @@ defaults:
   - model: null_nonsym
   - vectorfield: rfm_cspnet
   - hydra: trash
+
+base_distribution_from_data: False

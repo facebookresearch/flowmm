@@ -189,7 +189,17 @@ class MaterialsRFMLitModule(ManifoldFMLitModule):
             split_manifold=True,
         )
         if x0 is None:
-            x0 = manifold.random(*x1.shape, dtype=x1.dtype, device=x1.device)
+            if self.cfg.base_distribution_from_data:
+                x0 = self.manifold_getter(
+                    batch.batch,
+                    batch.atom_types_initial,
+                    batch.frac_coords_initial,
+                    batch.lengths_initial,
+                    batch.angles_initial,
+                    split_manifold=True,
+                )[0]
+            else:
+                x0 = manifold.random(*x1.shape, dtype=x1.dtype, device=x1.device)
         else:
             x0 = x0.to(x1)
 
@@ -230,6 +240,7 @@ class MaterialsRFMLitModule(ManifoldFMLitModule):
         num_atoms = self.manifold_getter._get_num_atoms(mask_a_or_f)
 
         if x0 is None:
+            assert not self.cfg.base_distribution_from_data, "Need to sample from the base distribution"
             x0 = manifold.random(*shape, device=node2graph.device)
         else:
             x0 = x0.to(device=node2graph.device)
@@ -272,6 +283,7 @@ class MaterialsRFMLitModule(ManifoldFMLitModule):
         num_atoms = self.manifold_getter._get_num_atoms(mask_a_or_f)
 
         if x0 is None:
+            assert not self.cfg.base_distribution_from_data, "Need to sample from the base distribution"
             x0 = manifold.random(*shape, device=node2graph.device)
         else:
             x0 = x0.to(device=node2graph.device)
@@ -553,7 +565,17 @@ class MaterialsRFMLitModule(ManifoldFMLitModule):
             split_manifold=True,
         )
         if x0 is None:
-            x0 = manifold.random(*x1.shape, dtype=x1.dtype, device=x1.device)
+            if self.cfg.base_distribution_from_data:
+                x0 = self.manifold_getter(
+                    batch.batch,
+                    batch.atom_types_initial,
+                    batch.frac_coords_initial,
+                    batch.lengths_initial,
+                    batch.angles_initial,
+                    split_manifold=True,
+                )[0]
+            else:
+                x0 = manifold.random(*x1.shape, dtype=x1.dtype, device=x1.device)
 
         vecfield = partial(
             self.vecfield,
@@ -764,11 +786,25 @@ class MaterialsRFMLitModule(ManifoldFMLitModule):
             batch.angles,
             split_manifold=False,
         )
+        if self.cfg.base_distribution_from_data:
+            x0 = self.manifold_getter(
+                batch.batch,
+                batch.atom_types_initial,
+                batch.frac_coords_initial,
+                batch.lengths_initial,
+                batch.angles_initial,
+                split_manifold=True,
+            )[0]
+        else:
+            x0 = None
+
         if self.cfg.integrate.get("compute_traj_velo_norms", False):
-            recon, norms_a, norms_f, norms_l = self.sample(batch, num_steps=num_steps)
+            recon, norms_a, norms_f, norms_l = self.sample(
+                batch, num_steps=num_steps, x0=x0
+            )
             norms = {"norms_a": norms_a, "norms_f": norms_f, "norms_l": norms_l}
         else:
-            recon = self.sample(batch, num_steps=num_steps)
+            recon = self.sample(batch, num_steps=num_steps, x0=x0)
             norms = {}
         atom_types, frac_coords, lattices = self.manifold_getter.flatrep_to_crystal(
             recon, dims, mask_a_or_f
@@ -842,13 +878,27 @@ class MaterialsRFMLitModule(ManifoldFMLitModule):
             batch.batch, dim_coords, split_manifold=False
         )
 
+        if self.cfg.base_distribution_from_data:
+            x0 = self.manifold_getter(
+                batch.batch,
+                batch.atom_types_initial,
+                batch.frac_coords_initial,
+                batch.lengths_initial,
+                batch.angles_initial,
+                split_manifold=True,
+            )[0]
+        else:
+            x0 = None
+
         if self.cfg.integrate.get("compute_traj_velo_norms", False):
             recon, norms_a, norms_f, norms_l = self.gen_sample(
-                batch.batch, dim_coords, num_steps=num_steps
+                batch.batch, dim_coords, num_steps=num_steps, x0=x0
             )
             norms = {"norms_a": norms_a, "norms_f": norms_f, "norms_l": norms_l}
         else:
-            recon = self.gen_sample(batch.batch, dim_coords, num_steps=num_steps)
+            recon = self.gen_sample(
+                batch.batch, dim_coords, num_steps=num_steps, x0=x0
+            )
             norms = {}
         atom_types, frac_coords, lattices = self.manifold_getter.flatrep_to_crystal(
             recon, dims, mask_a_or_f
