@@ -153,9 +153,7 @@ class MaskedNoDriftFlatTorus01(MaskedManifold, FlatTorus01):
             u,
             dim=-2,
             keepdim=True,
-        ) / self.mask.to(
-            u
-        ).sum(dim=[-2, -1])
+        ) / self.mask.to(u).sum(dim=[-2, -1])
         out = u - mean
         out = self.mask_and_reshape(initial_shape, out)
         return super().proju(x, out)
@@ -167,6 +165,15 @@ class MaskedNoDriftFlatTorus01(MaskedManifold, FlatTorus01):
         out = torch.rand(*size, dtype=dtype, device=device)
         return self.projx(out)
 
+    def random_gaussian(self, *size, dtype=None, device=None) -> torch.Tensor:
+        assert (
+            size[-1] == self.max_num_atoms * self.dim_coords
+        ), "last dimension must be compatible with max_num_atoms and dim_coords"
+        # Gaussian with std=0.5 centered at 0.5
+        out = 0.5 * torch.randn(*size, dtype=dtype, device=device) + 0.5
+        return self.projx(out)
+
+    # random = random_gaussian
     random = random_uniform
 
     def extra_repr(self):

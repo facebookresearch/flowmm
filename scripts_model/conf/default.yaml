@@ -6,7 +6,7 @@ core:
 
 logging:
   # log frequency
-  val_check_interval: 5
+  val_check_interval: 1
   wandb:
     project: rfmcsp-${model.target_distribution}-${hydra:runtime.choices.data}
     entity: null
@@ -26,7 +26,7 @@ optim:
   # RFM
   optimizer:
     _target_: torch.optim.AdamW
-    lr: 0.0003
+    lr: 1e-3
     weight_decay: 0.0
   lr_scheduler:
     _target_: torch.optim.lr_scheduler.CosineAnnealingLR
@@ -52,7 +52,7 @@ train:
     max_epochs: ${data.train_max_epochs}
     accumulate_grad_batches: 1
     num_sanity_val_steps: 1
-    gradient_clip_val: 0.5
+    gradient_clip_val: 10
     gradient_clip_algorithm: value
     profiler: simple
 
@@ -84,14 +84,15 @@ test:
 integrate:
   div_mode: rademacher  # "exact" is an alternative
   method: euler
-  num_steps: 1_000
+  num_steps: 0_100 # 1_000
   normalize_loglik: True  # this is normalized by dimension
   inference_anneal_slope: 0.0
   inference_anneal_offset: 0.0
+  entire_traj: True
 
 defaults:
   - _self_
-  - data: perov
-  - model: null_nonsym
-  - vectorfield: rfm_cspnet
+  - data: test_data
+  - model: docking_only_coords # null_params_for_testing # docking_only_coords
+  - vectorfield: rfm_cspnet # cspnet # rfm_cspnet 
   - hydra: trash

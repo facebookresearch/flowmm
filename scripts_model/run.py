@@ -33,6 +33,7 @@ try:
 except KeyError:
     WANDB_MODE = ""
 
+WANDB_MODE = "disabled"
 
 register_omega_conf_resolvers()
 

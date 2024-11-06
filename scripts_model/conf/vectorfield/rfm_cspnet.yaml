@@ -1,19 +1,15 @@
-_target_: flowmm.model.arch.CSPNet
-hidden_dim: 512
-time_dim: 256
-num_layers: 6
+_target_: rfm_docking.docking_arch.DockingCSPNet
+hidden_dim: 256
+time_dim: 128
+num_layers: 3
 act_fn: silu
 dis_emb: sin
-num_freqs: 128
-edge_style: fc
-max_neighbors: 20
-cutoff: 7.
+num_freqs: 32
+edge_style: knn
+max_neighbors: 7
+cutoff: 15.
 ln: true
 use_log_map: true  # false would put it in line with DiffCSP (euclidean distance function)
-dim_atomic_rep: ${get_dim_atomic_rep:${model.manifold_getter.atom_type_manifold}}
-lattice_manifold: ${model.manifold_getter.lattice_manifold}
-concat_sum_pool: true
-represent_num_atoms: true
-represent_angle_edge_to_lattice: true
-self_edges: false
+# dim_atomic_rep: ${get_dim_atomic_rep:${model.manifold_getter.atom_type_manifold}}
+self_edges: true
 self_cond: ${model.self_cond}

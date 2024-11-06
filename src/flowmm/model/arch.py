@@ -239,7 +239,7 @@ class CSPNet(DiffCSPNet):
         dis_emb: str = "sin",
         n_space: int = 3,
         num_freqs: int = 128,
-        edge_style: str = "fc",
+        edge_style: str = "knn",
         cutoff: float = 7.0,
         max_neighbors: int = 20,
         ln: bool = True,
@@ -312,9 +312,7 @@ class CSPNet(DiffCSPNet):
             )
         elif lattice_manifold == "non_symmetric":
             # diffcsp doesn't have a bias on lattice outputs
-            self.lattice_out = nn.Linear(
-                num_pools * hidden_dim, n_space**2, bias=False
-            )
+            self.lattice_out = nn.Linear(num_pools * hidden_dim, n_space**2, bias=False)
         else:
             raise ValueError()
 

@@ -1,0 +1,7 @@
+cost_coord: 1.
+affine_combine_costs: true
+target_distribution: unconditional
+self_cond: false
+
+manifold_getter:
+  coord_manifold: flat_torus_01_normal

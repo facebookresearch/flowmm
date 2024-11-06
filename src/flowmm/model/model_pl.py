@@ -14,7 +14,7 @@ from geoopt.manifolds.product import ProductManifold
 from omegaconf import DictConfig
 from pytorch_lightning.utilities.warnings import PossibleUserWarning
 from torch.func import jvp, vjp
-from torch_geometric.data import Data
+from torch_geometric.data import Data, Batch
 from torchmetrics import MeanMetric, MinMetric
 
 from diffcsp.common.data_utils import lattices_to_params_shape
@@ -536,6 +536,34 @@ class MaterialsRFMLitModule(ManifoldFMLitModule):
     def rfm_loss_fn(
         self, batch: Data, x0: torch.Tensor = None
     ) -> dict[str, torch.Tensor]:
+        batch = Batch.from_data_list(batch.osda)
+
+        """### for overfitting
+        N = batch.batch.max().item() + 1
+        batch.frac_coords = torch.tensor(
+            [
+                [0.05, 0.05, 0.05],
+                [0.1, 0.1, 0.1],
+                [0.2, 0.2, 0.2],
+                [0.4, 0.4, 0.4],
+                [0.8, 0.8, 0.8],
+            ],
+            device=batch.frac_coords.device,
+        ).repeat(N, 1)
+
+        batch.batch = torch.repeat_interleave(
+            torch.arange(N, device=batch.batch.device), 5
+        )
+
+        batch.atom_types = torch.tensor(
+            [1, 1, 2, 1, 2],
+            device=batch.frac_coords.device,
+        ).repeat(N)
+        batch.num_atoms = 5 * torch.ones_like(
+            batch.num_atoms, device=batch.frac_coords.device
+        )"""
+        batch.num_atoms = batch.num_atoms.to(batch.frac_coords.device)
+
         (
             x1,
             manifold,

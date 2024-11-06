@@ -3,7 +3,7 @@ cost_lattice: 1.
 cost_type: 0.0
 affine_combine_costs: true
 target_distribution: conditional
-self_cond: false
+self_cond: true
 
 manifold_getter:
   atom_type_manifold: null_manifold

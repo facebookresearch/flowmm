@@ -81,7 +81,7 @@ class AffineStatsParallelAlgorithm(torch.nn.Module):
         return torch.sqrt(self.var + self.epsilon)
 
 
-collect_stats_on_options = Literal["coord", "lattice"]
+collect_stats_on_options = Literal["lattice"]  # Literal["coord", "lattice"]
 
 
 def compute_affine_stats(
@@ -95,6 +95,7 @@ def compute_affine_stats(
 ):
     from flowmm.cfg_utils import init_loaders
     from flowmm.rfm.manifold_getter import ManifoldGetter
+    from torch_geometric.data import Batch
 
     train_loader, *_ = init_loaders(dataset=dataset, batch_size=8192)
 
@@ -110,6 +111,9 @@ def compute_affine_stats(
 
     for _ in tqdm(range(epochs)):
         for batch in tqdm(train_loader):
+            ### added
+            batch = Batch.from_data_list(batch.osda)
+            ###
             (
                 x1,
                 manifold,
@@ -325,6 +329,7 @@ if __name__ == "__main__":
                 file = file.resolve()
                 with open(file, "w") as f:
                     yaml.dump({k: v.tolist() for k, v in stats.items()}, f)
+
             elif collect_stats_on == "lattice":
                 # non_symmetric
                 # this one is difficult because its multiplied by L

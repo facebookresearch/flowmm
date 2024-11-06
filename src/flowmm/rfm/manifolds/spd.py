@@ -427,7 +427,11 @@ def compute_spd_pLTL_given_n_std_coef(
         # mean_iso = SPDGivenN.closest_isotropic(mean, Riem_dist=True)
 
         iso = SPDGivenN.closest_isotropic(spd_vecs_given_n, Riem_dist=True)
-        log_noise_samples = s.logmap(prior_mean, iso)[:, 0]
+        # TODO is this correct? I get nans
+        # log_noise_samples = s.logmap(prior_mean, iso)[:, 0]
+        # now using this
+        log_noise_samples = s.logmap(prior_mean, iso)[0, :]
+
         std_coefs.append((log_noise_samples.std() ** (3 / 2)) / n)
     std_coefs = torch.stack(std_coefs, dim=0)
     return std_coefs.mean(), std_coefs.std()
