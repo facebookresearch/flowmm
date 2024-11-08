@@ -92,7 +92,7 @@ integrate:
 
 defaults:
   - _self_
-  - data: test_data
+  - data: docking
   - model: docking_only_coords # null_params_for_testing # docking_only_coords
-  - vectorfield: rfm_cspnet # cspnet # rfm_cspnet 
+  - vectorfield: dock_cspnet # cspnet # rfm_cspnet 
   - hydra: trash

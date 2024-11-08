@@ -3,7 +3,7 @@ from torch_geometric.data import Batch, HeteroData
 from torch_geometric.loader.dataloader import Collater
 
 from rfm_docking.reassignment import ot_reassignment
-from rfm_docking.docking_manifold_getter import DockingManifoldGetter
+from rfm_docking.manifold_getter import DockingManifoldGetter
 
 
 def collate_fn(

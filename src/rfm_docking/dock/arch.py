@@ -179,7 +179,7 @@ class DockingCSPNet(DiffCSPNet):
         self.node_embedding = nn.Embedding(len(chemical_symbols), hidden_dim)
 
         self.atom_latent_emb = nn.Linear(
-            hidden_dim + time_dim,  #  + num_freqs * n_space * 2 * 3 * coef,
+            hidden_dim + time_dim,
             hidden_dim,
             bias=True,  # False
         )
@@ -371,35 +371,12 @@ class DockingCSPNet(DiffCSPNet):
         t_per_atom = t_emb.repeat_interleave(
             batch.osda.num_atoms.to(t_emb.device), dim=0
         )
-        """osda_space_emb = self.dis_emb(batch.osda.frac_coords).reshape(
-            batch.osda.frac_coords.shape[0], -1
-        )
-
-        osda_neighbor_emb = self.dis_emb(osda_frac_diff).reshape(
-            osda_frac_diff.shape[0], -1
-        )
-
-        osda_out_emb = scatter(
-            osda_neighbor_emb,
-            osda_edges[0],
-            dim=0,
-            reduce="add",
-            dim_size=osda_node_features.shape[0],
-        )
-
-        osda_in_emb = scatter(
-            osda_neighbor_emb,
-            osda_edges[1],
-            dim=0,
-            reduce="add",
-            dim_size=osda_node_features.shape[0],
-        )"""
 
         osda_node_features = torch.cat(
             [
                 osda_node_features,
                 t_per_atom,
-            ],  # osda_space_emb, osda_out_emb, osda_in_emb],
+            ],
             dim=1,
         )
         osda_node_features = self.atom_latent_emb(osda_node_features)

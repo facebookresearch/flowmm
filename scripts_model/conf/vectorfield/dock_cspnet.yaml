@@ -1,4 +1,4 @@
-_target_: rfm_docking.docking_arch.DockingCSPNet
+_target_: rfm_docking.dock.arch.DockingCSPNet
 hidden_dim: 256
 time_dim: 128
 num_layers: 3

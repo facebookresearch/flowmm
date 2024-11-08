@@ -30,16 +30,13 @@ from flowmm.model.solvers import (
     projx_integrate_xt_to_x1,
 )
 from flowmm.model.standardize import get_affine_stats
-from rfm_docking.docking_manifold_getter import DockingManifoldGetter, Dims
-from rfm_docking.docking_arch import DockingCSPNet, ProjectedConjugatedCSPNet
+from rfm_docking.manifold_getter import DockingManifoldGetter, Dims
+from rfm_docking.dock.arch import DockingCSPNet, ProjectedConjugatedCSPNet
 from rfm_docking.reassignment import ot_reassignment
 from rfm_docking.utils import sample_mol_in_frac
 from flowmm.rfm.manifolds.spd import SPDGivenN, SPDNonIsotropicRandom
 from flowmm.rfm.vmap import VMapManifolds
 from flowmm.rfm.manifolds.flat_torus import FlatTorus01
-
-ROTATE = R.random()
-ROTATE = torch.tensor(ROTATE.as_matrix(), dtype=torch.float32).T
 
 
 def output_and_div(

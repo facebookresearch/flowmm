@@ -14,8 +14,8 @@ from torch.utils.data import Dataset, DataLoader
 
 from diffcsp.common.utils import PROJECT_ROOT
 from diffcsp.common.data_utils import get_scaler_from_data_list
-from src.rfm_docking.collate import collate_fn
-from src.rfm_docking.docking_manifold_getter import DockingManifoldGetter
+from rfm_docking.dock.collate import collate_fn
+from rfm_docking.manifold_getter import DockingManifoldGetter
 
 
 def worker_init_fn(id: int):
