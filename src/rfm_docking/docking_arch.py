@@ -179,7 +179,7 @@ class DockingCSPNet(DiffCSPNet):
         self.node_embedding = nn.Embedding(len(chemical_symbols), hidden_dim)
 
         self.atom_latent_emb = nn.Linear(
-            hidden_dim + time_dim + num_freqs * n_space * 2 * 3 * coef,
+            hidden_dim + time_dim,  #  + num_freqs * n_space * 2 * 3 * coef,
             hidden_dim,
             bias=True,  # False
         )
@@ -297,7 +297,7 @@ class DockingCSPNet(DiffCSPNet):
         )
         osda_edge2graph = batch.osda.batch[osda_edges[0]]
 
-        """# for zeolite
+        # for zeolite
         zeolite_edges, zeolite_frac_diff = self.gen_edges(
             batch.zeolite.num_atoms,
             batch.zeolite.frac_coords,
@@ -323,7 +323,7 @@ class DockingCSPNet(DiffCSPNet):
         ]
         cross_frac_coords = torch.cat(cross_frac_coords, dim=0)
         cross_batch = torch.repeat_interleave(
-            torch.arange(batch_size), cross_num_atoms
+            torch.arange(batch_size, device=cross_frac_coords.device), cross_num_atoms
         ).to(cross_frac_coords.device)
 
         # a mask indicating which nodes in the cross graph are osda nodes
@@ -363,7 +363,7 @@ class DockingCSPNet(DiffCSPNet):
         cross_edges = cross_edges[:, is_cross_edge]
         cross_frac_diff = cross_frac_diff[is_cross_edge]
 
-        cross_edge2graph = cross_batch[cross_edges[0]]"""
+        cross_edge2graph = cross_batch[cross_edges[0]]
 
         # neural network
         # embed atom features
@@ -371,7 +371,7 @@ class DockingCSPNet(DiffCSPNet):
         t_per_atom = t_emb.repeat_interleave(
             batch.osda.num_atoms.to(t_emb.device), dim=0
         )
-        osda_space_emb = self.dis_emb(batch.osda.frac_coords).reshape(
+        """osda_space_emb = self.dis_emb(batch.osda.frac_coords).reshape(
             batch.osda.frac_coords.shape[0], -1
         )
 
@@ -393,24 +393,27 @@ class DockingCSPNet(DiffCSPNet):
             dim=0,
             reduce="add",
             dim_size=osda_node_features.shape[0],
-        )
+        )"""
 
         osda_node_features = torch.cat(
-            [osda_node_features, t_per_atom, osda_space_emb, osda_out_emb, osda_in_emb],
+            [
+                osda_node_features,
+                t_per_atom,
+            ],  # osda_space_emb, osda_out_emb, osda_in_emb],
             dim=1,
         )
         osda_node_features = self.atom_latent_emb(osda_node_features)
         osda_node_features = self.act_fn(osda_node_features)
 
-        """zeolite_node_features = self.node_embedding(batch.zeolite.atom_types)
+        zeolite_node_features = self.node_embedding(batch.zeolite.atom_types)
         t_per_atom = t_emb.repeat_interleave(
             batch.zeolite.num_atoms.to(t_emb.device), dim=0
         )
         zeolite_node_features = torch.cat([zeolite_node_features, t_per_atom], dim=1)
-        zeolite_node_features = self.atom_latent_emb(zeolite_node_features)"""
+        zeolite_node_features = self.atom_latent_emb(zeolite_node_features)
 
         for i in range(0, self.num_layers):
-            """# update zeolite node feats
+            # update zeolite node feats
             zeolite_node_features = self._modules["csp_layer_%d" % i](
                 zeolite_node_features,
                 batch.lattices,
@@ -447,7 +450,7 @@ class DockingCSPNet(DiffCSPNet):
             osda_node_features = cross_node_features[osda_nodes_mask]
             zeolite_node_features = cross_node_features[
                 torch.logical_not(osda_nodes_mask)
-            ]"""
+            ]
 
             # update osda node feats
             osda_node_features = self._modules["csp_layer_%d" % i](
@@ -521,12 +524,12 @@ class ProjectedConjugatedCSPNet(nn.Module):
             )
 
         # handle zeolite second
-        zeolite_frac_coords = self.manifold_getter.flatrep_to_georep(
+        """zeolite_frac_coords = self.manifold_getter.flatrep_to_georep(
             batch.zeolite.frac_coords,
             dims=batch.zeolite.dims,
             mask_f=batch.zeolite.mask_f,
         )
-        batch.zeolite.frac_coords = zeolite_frac_coords.f
+        batch.zeolite.frac_coords = zeolite_frac_coords.f"""
 
         coord_out = self.cspnet(
             batch,

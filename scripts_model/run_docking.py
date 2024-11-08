@@ -193,7 +193,9 @@ def run(cfg: DictConfig) -> None:
     hydra.utils.log.info("Starting testing!")
     ckpt_path = "last" if cfg.train.pl_trainer.fast_dev_run else "best"
     # trainer.test(datamodule=datamodule, ckpt_path=ckpt_path)
-    traj = trainer.predict(dataloaders=datamodule.val_dataloader(), ckpt_path=ckpt_path)
+    traj = trainer.predict(
+        dataloaders=datamodule.test_dataloader(), ckpt_path=ckpt_path
+    )
 
     torch.save(traj, "traj.pt")
 

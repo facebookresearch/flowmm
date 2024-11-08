@@ -9,14 +9,17 @@ from rfm_docking.docking_manifold_getter import DockingManifoldGetter
 def collate_fn(
     batch: list[HeteroData], manifold_getter: DockingManifoldGetter, do_ot: bool = False
 ) -> HeteroData:
-    """"""
+    """Where the magic happens"""
+
     batch = Batch.from_data_list(batch)
 
     # batch data
     osda = batch.osda
     zeolite = batch.zeolite
 
-    # TODO put this into collate_fn
+    smiles = batch.smiles
+    crystal_id = batch.crystal_id
+
     osda = Batch.from_data_list(osda)
     zeolite = Batch.from_data_list(zeolite)
 
@@ -66,6 +69,8 @@ def collate_fn(
         ).flat
 
     batch = HeteroData()
+    batch.crystal_id = crystal_id
+    batch.smiles = smiles
     batch.osda = osda
     batch.zeolite = zeolite
     batch.x0 = x0

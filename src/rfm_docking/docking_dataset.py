@@ -14,6 +14,8 @@ from p_tqdm import p_umap
 
 from diffcsp.common.utils import PROJECT_ROOT
 from rfm_docking.utils import sample_mol_in_frac
+from tqdm import tqdm
+from multiprocessing import Pool
 from diffcsp.common.data_utils import (
     preprocess,
     add_scaled_lattice_prop,
@@ -27,7 +29,9 @@ from rfm_docking.featurization import (
 )
 
 
-def process_one(row, graph_method, prop_list):
+def process_one(args):
+    row, graph_method, prop_list = args
+
     crystal_id = row.dock_crystal
 
     ### process the lattice
@@ -72,12 +76,10 @@ def process_one(row, graph_method, prop_list):
     dock_zeolite_graph_arrays = build_crystal_graph(dock_zeolite, graph_method)
 
     # process the osda
-    print("Warning: only using the first osda for now")
-    dock_osda_axyz = np.split(dock_osda_axyz, loading)[0]
     dock_osda_atoms, dock_osda_pos = get_atoms_and_pos(dock_osda_axyz)
 
     # remove hydrogens
-    non_hydrogen = torch.where(dock_osda_atoms != 1)[0]
+    non_hydrogen = torch.where(dock_osda_atoms.squeeze() != 1, True, False)
     dock_osda_atoms = dock_osda_atoms[non_hydrogen]
     dock_osda_pos = dock_osda_pos[non_hydrogen]
 
@@ -125,6 +127,7 @@ def process_one(row, graph_method, prop_list):
     preprocessed_dict = {
         "crystal_id": crystal_id,
         "smiles": smiles,
+        "loading": loading,
         "osda_feats": (node_feats, edge_feats, edge_index),
         "dock_zeolite_graph_arrays": dock_zeolite_graph_arrays,
         "dock_osda_graph_arrays": dock_osda_graph_arrays,
@@ -147,15 +150,29 @@ def custom_preprocess(
 ):
     df = pd.read_csv(input_file)  # .loc[:0]
 
-    unordered_results = p_umap(
-        process_one,
-        [df.iloc[idx] for idx in range(len(df))],
-        [graph_method] * len(df),
-        [prop_list] * len(df),
-        num_cpus=num_workers,
-    )
+    def parallelized():
+        # Create a pool of workers
+        with Pool(num_workers) as pool:
+            for item in tqdm(
+                pool.imap_unordered(
+                    process_one,
+                    iterable=[
+                        (df.iloc[idx], graph_method, prop_list)
+                        for idx in range(len(df))
+                    ],
+                    chunksize=1,
+                ),
+                total=len(df),
+            ):
+                yield item
 
+    # Convert the unordered results to a list
+    unordered_results = list(parallelized())
+
+    # Create a dictionary mapping crystal_id to results
     mpid_to_results = {result["crystal_id"]: result for result in unordered_results}
+
+    # Create a list of ordered results based on the original order of the dataframe
     ordered_results = [
         mpid_to_results[df.iloc[idx]["dock_crystal"]] for idx in range(len(df))
     ]

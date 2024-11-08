@@ -6,10 +6,10 @@ act_fn: silu
 dis_emb: sin
 num_freqs: 32
 edge_style: knn
-max_neighbors: 7
+max_neighbors: 5
 cutoff: 15.
 ln: true
 use_log_map: true  # false would put it in line with DiffCSP (euclidean distance function)
 # dim_atomic_rep: ${get_dim_atomic_rep:${model.manifold_getter.atom_type_manifold}}
-self_edges: true
+self_edges: false
 self_cond: ${model.self_cond}

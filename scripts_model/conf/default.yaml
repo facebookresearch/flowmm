@@ -26,7 +26,7 @@ optim:
   # RFM
   optimizer:
     _target_: torch.optim.AdamW
-    lr: 1e-3
+    lr: 5e-4
     weight_decay: 0.0
   lr_scheduler:
     _target_: torch.optim.lr_scheduler.CosineAnnealingLR
@@ -84,7 +84,7 @@ test:
 integrate:
   div_mode: rademacher  # "exact" is an alternative
   method: euler
-  num_steps: 0_100 # 1_000
+  num_steps: 100 # 0_100 
   normalize_loglik: True  # this is normalized by dimension
   inference_anneal_slope: 0.0
   inference_anneal_offset: 0.0

@@ -433,84 +433,6 @@ class DockingRFMLitModule(ManifoldFMLitModule):
     def rfm_loss_fn(
         self, batch: Data, x0: torch.Tensor = None
     ) -> dict[str, torch.Tensor]:
-        """osda = batch.osda
-        zeolite = batch.zeolite
-
-        # TODO put this into collate_fn
-        osda = Batch.from_data_list(osda)
-        batch.osda = osda
-
-        zeolite = Batch.from_data_list(zeolite)
-        batch.zeolite = zeolite"""
-
-        """Gaussian:[0.6117, 0.7221, 0.7199],
-            [0.2080, 0.4378, 0.8645],
-            [0.5105, 0.9574, 0.7129],
-            [0.5369, 0.7755, 0.8089],
-            [0.2634, 0.9770, 0.3232],"""
-
-        """### for overfitting
-        N = osda.batch.max().item() + 1
-        osda.frac_coords = torch.tensor(
-            [
-                [0.1, 0.1, 0.1],
-                [0.22, 0.21, 0.24],
-                [0.34, 0.31, 0.32],
-                [0.42, 0.41, 0.4],
-                [0.53, 0.5, 0.52],
-            ],
-            device=osda.frac_coords.device,
-        ).repeat(N, 1)
-
-        osda.batch = torch.repeat_interleave(
-            torch.arange(N, device=osda.batch.device), 5
-        )
-
-        osda.atom_types = torch.tensor(
-            [1, 1, 1, 1, 1],
-            device=osda.frac_coords.device,
-        ).repeat(N)
-        osda.num_atoms = 5 * torch.ones_like(osda.num_atoms)"""
-
-        """(
-            x1,
-            osda_manifold,
-            osda_f_manifold,
-            osda_dims,
-            osda_mask_f,
-        ) = self.manifold_getter(
-            osda.batch,
-            osda.frac_coords,
-            split_manifold=True,
-        )
-        batch.osda.manifold = osda_manifold
-        batch.osda.f_manifold = osda_f_manifold
-        batch.osda.dims = osda_dims
-        batch.osda.mask_f = osda_mask_f
-
-        _, _, _, zeolite_dims, zeolite_mask_f = self.manifold_getter(
-            zeolite.batch, zeolite.frac_coords, split_manifold=True
-        )
-        batch.zeolite.dims = zeolite_dims
-        batch.zeolite.mask_f = zeolite_mask_f
-
-        if x0 is None:
-            x0 = osda_manifold.random(*x1.shape, dtype=x1.dtype, device=x1.device)"""
-
-        """x0 = (
-            FlatTorus01.projx(torch.matmul(osda.conformer, ROTATE)).reshape(x1.shape)
-            if osda.conformer is not None
-            else x0
-        )"""
-
-        """### for overfitting
-        # x0 = FlatTorus01.projx(x1 + torch.rand(x1.shape, device=x1.device) * 0.5)
-
-        # lattices = lattice_params_to_matrix_torch(osda.lengths, osda.angles)
-        # lattices is the invariant(!!) representation of the lattice, parametrized by lengths and angles
-        lattices = torch.cat([osda.lengths, osda.angles], dim=-1)
-        batch.lattices = lattices"""
-
         vecfield = partial(
             self.vecfield,
             batch=batch,
@@ -798,14 +720,18 @@ class DockingRFMLitModule(ManifoldFMLitModule):
 
         osda_traj = {
             "atom_types": batch.osda.atom_types,
+            "target_coords": batch.osda.frac_coords,
             "frac_coords": torch.stack(frac_coords, dim=0),
             "num_atoms": batch.osda.num_atoms,
+            "batch": batch.osda.batch,
         }
         zeolite = {
             "atom_types": batch.zeolite.atom_types,
             "frac_coords": batch.zeolite.frac_coords,
+            "batch": batch.zeolite.batch,
         }
         out = {
+            "crystal_id": batch.crystal_id,
             "osda_traj": osda_traj,
             "zeolite": zeolite,
             "lattices": batch.lattices,
