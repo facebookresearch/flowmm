@@ -1,5 +1,5 @@
 vectorfield:
-  _target_: rfm_docking.dock.arch.DockingCSPNet
+  _target_: rfm_docking.dock_and_optimize.arch.DockAndOptimizeCSPNet
   hidden_dim: 256
   time_dim: 128
   num_layers: 3
@@ -16,4 +16,4 @@ vectorfield:
   self_cond: ${model.self_cond}
 
 conjugate_model:
-  _target_: rfm_docking.dock.arch.ProjectedConjugatedCSPNet
+  _target_: rfm_docking.dock_and_optimize.arch.ProjectedConjugatedCSPNet

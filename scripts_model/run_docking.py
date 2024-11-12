@@ -22,7 +22,7 @@ from pytorch_lightning.loggers import WandbLogger
 import wandb
 from diffcsp.common.utils import log_hyperparameters
 from flowmm.model.eval_utils import register_omega_conf_resolvers
-from rfm_docking.dock.model_pl import DockingRFMLitModule
+from rfm_docking.model_pl import DockingRFMLitModule
 
 # https://github.com/Project-MONAI/MONAI/issues/701#issuecomment-767330310
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)

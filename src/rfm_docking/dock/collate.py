@@ -6,7 +6,7 @@ from rfm_docking.reassignment import ot_reassignment
 from rfm_docking.manifold_getter import DockingManifoldGetter
 
 
-def collate_fn(
+def dock_collate_fn(
     batch: list[HeteroData], manifold_getter: DockingManifoldGetter, do_ot: bool = False
 ) -> HeteroData:
     """Where the magic happens"""
@@ -77,4 +77,20 @@ def collate_fn(
     batch.x1 = x1
     batch.lattices = lattices
 
+    batch.num_atoms = osda.num_atoms
+    batch.manifold = osda_manifold
+    batch.f_manifold = osda_f_manifold
+    batch.dims = osda_dims
+    batch.mask_f = osda_mask_f
+    batch.batch = osda.batch
+
     return batch
+
+
+class DockCollater:
+    def __init__(self, manifold_getter: DockingManifoldGetter, do_ot: bool = False):
+        self.manifold_getter = manifold_getter
+        self.do_ot = do_ot
+
+    def __call__(self, batch: list[HeteroData]) -> HeteroData:
+        return dock_collate_fn(batch, self.manifold_getter, self.do_ot)

@@ -4,6 +4,7 @@ from pathlib import Path
 from functools import partial
 
 import hydra
+from hydra.utils import get_class
 import numpy as np
 import omegaconf
 import pytorch_lightning as pl
@@ -14,7 +15,6 @@ from torch.utils.data import Dataset, DataLoader
 
 from diffcsp.common.utils import PROJECT_ROOT
 from diffcsp.common.data_utils import get_scaler_from_data_list
-from rfm_docking.dock.collate import collate_fn
 from rfm_docking.manifold_getter import DockingManifoldGetter
 
 
@@ -44,6 +44,7 @@ class CrystDataModule(pl.LightningDataModule):
         batch_size: DictConfig,
         coord_manifold: str,
         dataset_name: str,
+        collate: DictConfig,
         scaler_path=None,
     ):
         super().__init__()
@@ -62,9 +63,9 @@ class CrystDataModule(pl.LightningDataModule):
 
         # TODO add OT to options
         # ...
-
-        self.collate_fn = partial(
-            collate_fn, manifold_getter=self.manifold_getter, do_ot=False
+        collate_class = get_class(collate._target_)
+        self.collate_fn = collate_class(
+            manifold_getter=self.manifold_getter, do_ot=False
         )
 
         self.get_scaler(scaler_path)

@@ -291,11 +291,10 @@ class DockAndOptimizeCSPNet(DiffCSPNet):
     ):
         t_emb = self.time_emb(t)
         t_emb = t_emb.expand(
-            batch.osda.num_atoms.shape[0], -1
+            batch.num_atoms.shape[0], -1
         )  # if there is a single t, repeat for the batch
 
         # create graph
-        # for osda
         edges, frac_diff = self.gen_edges(
             batch.num_atoms,
             batch.frac_coords,
@@ -308,38 +307,38 @@ class DockAndOptimizeCSPNet(DiffCSPNet):
 
         # neural network
         # embed atom features
-        osda_node_features = self.node_embedding(batch.atom_types)
+        node_features = self.node_embedding(batch.atom_types)
         t_per_atom = t_emb.repeat_interleave(batch.num_atoms.to(t_emb.device), dim=0)
 
-        osda_node_features = torch.cat(
+        node_features = torch.cat(
             [
-                osda_node_features,
+                node_features,
                 t_per_atom,
             ],
             dim=1,
         )
-        osda_node_features = self.atom_latent_emb(osda_node_features)
-        osda_node_features = self.act_fn(osda_node_features)
+        node_features = self.atom_latent_emb(node_features)
+        node_features = self.act_fn(node_features)
 
         # do docking first
         for i in range(0, self.num_layers):
             # update osda node feats
-            osda_node_features = self._modules["dock_layer_%d" % i](
-                osda_node_features,
+            node_features = self._modules["dock_layer_%d" % i](
+                node_features,
                 batch.lattices,
-                osda_edges,
-                osda_edge2graph,
-                osda_frac_diff,
-                batch.osda.num_atoms,
+                edges,
+                edge2graph,
+                frac_diff,
+                batch.num_atoms,
             )
 
         if self.ln:
-            osda_node_features = self.final_layer_norm(osda_node_features)
+            node_features = self.final_layer_norm(node_features)
 
         # predict coords
-        osda_coord_out = self.coord_out(osda_node_features)
+        coord_out = self.coord_out(node_features)
 
-        return osda_coord_out
+        return coord_out
 
 
 class ProjectedConjugatedCSPNet(nn.Module):
@@ -370,29 +369,26 @@ class ProjectedConjugatedCSPNet(nn.Module):
         x: torch.Tensor,
         cond: torch.Tensor | None,
     ) -> ManifoldGetterOut:
-        # handle osda first
-        osda_frac_coords = self.manifold_getter.flatrep_to_georep(
+        frac_coords = self.manifold_getter.flatrep_to_georep(
             x,
-            dims=batch.osda.dims,
-            mask_f=batch.osda.mask_f,
+            dims=batch.dims,
+            mask_f=batch.mask_f,
         )
-        batch.osda.frac_coords = osda_frac_coords.f
+        batch.frac_coords = frac_coords.f
 
         if self.self_cond:
             if cond is not None:
                 fc_cond = self.manifold_getter.flatrep_to_georep(
                     cond,
-                    dims=batch.osda.dims,
-                    mask_f=batch.osda.mask_f,
+                    dims=batch.dims,
+                    mask_f=batch.mask_f,
                 )
                 fc_cond = fc_cond.f
 
             else:
-                fc_cond = torch.zeros_like(osda_frac_coords)
+                fc_cond = torch.zeros_like(frac_coords)
 
-            batch.osda.frac_coords = torch.cat(
-                [batch.osda.frac_coords, fc_cond], dim=-1
-            )
+            batch.frac_coords = torch.cat([batch.frac_coords, fc_cond], dim=-1)
 
         coord_out = self.cspnet(
             batch,
