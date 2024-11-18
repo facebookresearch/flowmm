@@ -1,7 +1,7 @@
 import torch
 from torch_geometric.data import Batch, HeteroData, Data
-from torch_geometric.loader.dataloader import Collater
 
+from src.flowmm.rfm.manifolds.flat_torus import FlatTorus01
 from rfm_docking.reassignment import ot_reassignment
 from rfm_docking.manifold_getter import DockingManifoldGetter
 
@@ -40,7 +40,7 @@ def dock_and_optimize_collate_fn(
 
     data_list = [
         Data(
-            frac_coords=frac_coords[i],
+            frac_coords=FlatTorus01.projx(frac_coords[i]),  # project to 0 to 1
             atom_types=atom_types[i],
             lengths=lengths[i],
             angles=angles[i],
@@ -76,22 +76,28 @@ def dock_and_optimize_collate_fn(
             zeolite_x0[zeolite_dock.batch == i].flatten()
         )
 
+        # potentially do ot
+        if do_ot:
+            # OT
+            # in georep for reassignment:
+            x0_geo = manifold_getter.flatrep_to_georep(x0, dims, mask_f).f
+            x1_geo = manifold_getter.flatrep_to_georep(x1, dims, mask_f).f
+
+            x0_osda_geo = x0_geo[batch.batch == i][:num_atoms_osda]
+            x1_osda_geo = x1_geo[batch.batch == i][:num_atoms_osda]
+            osda_atom_types = batch.atom_types[batch.batch == i][:num_atoms_osda]
+
+            # reassign x0 to x1
+            _, reassigned_idx = ot_reassignment(
+                x0_osda_geo, x1_osda_geo, osda_atom_types, cost="geodesic"
+            )
+            x1_osda_geo = x1_osda_geo[reassigned_idx]
+
+            # reassigned x1 back to flatrep
+            x1[i, : num_atoms_osda * 3] = x1_osda_geo.flatten()
+
     # lattices is the invariant(!!) representation of the lattice, parametrized by lengths and angles
     lattices = torch.cat([batch.lengths, batch.angles], dim=-1)
-
-    # potentially do ot
-    if do_ot:
-        # OT
-        # in georep for reassignment:
-        x0_geo = manifold_getter.flatrep_to_georep(x0, osda_dims, osda_mask_f).f
-        x1_geo = manifold_getter.flatrep_to_georep(x1, osda_dims, osda_mask_f).f
-
-        # reassign x0 to x1
-        reassigned_idx = ot_reassignment(x0_geo, x1_geo, osda.batch, cost="geodesic")
-        x1_geo = x1_geo[reassigned_idx]
-        x1 = manifold_getter.georep_to_flatrep(
-            osda.batch, x1_geo, split_manifold=True
-        ).flat
 
     batch = Batch(
         crystal_id=crystal_id,

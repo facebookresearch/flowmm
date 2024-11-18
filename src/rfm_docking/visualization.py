@@ -2,6 +2,10 @@ from ase.io import read, write
 from ase import Atoms, Atom
 import torch
 
+from diffcsp.common.data_utils import lattice_params_to_matrix_torch
+from flowmm.rfm.manifolds.flat_torus import FlatTorus01
+from rfm_docking.reassignment import ot_reassignment
+
 
 class InMemoryTrajectory:
     def __init__(self):
@@ -17,13 +21,13 @@ class InMemoryTrajectory:
         return len(self.frames)
 
 
-def create_gif_from_cif(
+def create_gif_from_traj(
     traj_file,
     output_gif,
 ):
     data = torch.load(traj_file)
 
-    index = 2
+    index = 0
     data = data[0]
     lattice = data["lattices"][index]
 
@@ -31,20 +35,24 @@ def create_gif_from_cif(
     osda_atoms = osda["atom_types"]
 
     zeolite = data["zeolite"]
-    zeolite_atoms = zeolite["atom_types"][zeolite["batch"] == index]
-    zeolite_coords = zeolite["frac_coords"][zeolite["batch"] == index]
+    zeolite_atoms = zeolite["atom_types"]
 
     structures = []
-    for coords in osda["frac_coords"]:
+    for osda_coords, zeolite_coords in zip(osda["frac_coords"], zeolite["frac_coords"]):
+        zeolite_atoms_i = zeolite_atoms[zeolite["batch"] == index]
+        zeolite_coords_i = zeolite_coords[zeolite["batch"] == index]
+
         osda_atoms_i = osda_atoms[osda["batch"] == index]
-        osda_atoms_ = torch.cat([osda_atoms_i, osda_atoms_i])  # , zeolite_atoms])
+        osda_coords_i = osda_coords[osda["batch"] == index]
 
-        coords_i = coords[osda["batch"] == index]
-        target_coords_i = osda["target_coords"][osda["batch"] == index]
+        osda_target_coords = osda["target_coords"][osda["batch"] == index] % 1.0
+        # atoms_i = torch.cat([osda_atoms_i, zeolite_atoms_i])
+        # coords_i = torch.cat([osda_coords_i, zeolite_coords_i])
+        atoms_i = torch.cat([osda_atoms_i, osda_atoms_i])
+        coords_i = torch.cat([osda_coords_i, osda_target_coords])
 
-        coords = torch.cat([coords_i, target_coords_i])  # , zeolite_coords])
         predicted = Atoms(
-            osda_atoms_, scaled_positions=coords, cell=tuple(lattice.squeeze().tolist())
+            atoms_i, scaled_positions=coords_i, cell=tuple(lattice.squeeze().tolist())
         )
 
         """# TODO add some distincting color for the target
@@ -63,7 +71,8 @@ def create_gif_from_cif(
 
 
 if __name__ == "__main__":
-    create_gif_from_cif(
-        traj_file="/home/malte/flowmm/runs/trash/2024-11-08/15-09-58/docking_only_coords-rfm_cspnet-at6o35i2/traj.pt",
-        output_gif="RFM_EMM17_3_zeolite.gif",
+    create_gif_from_traj(
+        # traj_file="/home/malte/flowmm/runs/trash/2024-11-13/10-44-45/docking_only_coords-dock_and_optimize_cspnet-tsq861qh/traj.pt",
+        traj_file="/home/malte/flowmm/runs/trash/2024-11-18/11-38-35/docking_only_coords-dock_and_optimize_cspnet-ubcbiysy/traj.pt",
+        output_gif="RFM_EMM17_0.gif",
     )

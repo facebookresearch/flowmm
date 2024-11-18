@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from tqdm import tqdm
 
-from manifm.solvers import euler_step, midpoint_step, rk4_step
+from manifm.solvers import get_step_fn
 from flowmm.rfm.vmap import VMapManifolds
 
 
@@ -15,11 +15,13 @@ def projx_integrate_xt_to_x1(
     xt: torch.Tensor,
     t: torch.Tensor,
     vt: torch.Tensor | None = None,
+    method="euler",
 ) -> torch.Tensor:
+    step_fn = get_step_fn(method)
     dt = 1.0 - t
     if vt is None:
         vt = odefunc(t, xt)
-    xt = euler_step(odefunc, xt, vt, t, dt)
+    xt = step_fn(odefunc, xt, vt, t, dt)
     xt = manifold.projx(xt)
     return xt
 
@@ -30,11 +32,7 @@ def projx_cond_integrator_return_last(
 ):
     """Has a lower memory cost since this doesn't store intermediate values."""
 
-    step_fn = {
-        "euler": euler_step,
-        # "midpoint": midpoint_step,  # not supported
-        # "rk4": rk4_step,  # not supported
-    }[method]
+    step_fn = get_step_fn(method)
 
     xt = x0
     x1_tm1 = None  # init cond
@@ -46,7 +44,9 @@ def projx_cond_integrator_return_last(
     for t0, t1 in zip(t0s, t[1:]):
         dt = t1 - t0
         vt = odefunc(t0, xt, x1_tm1)
-        x1_tm1 = projx_integrate_xt_to_x1(manifold, odefunc, xt, t0, vt)  # new cond
+        x1_tm1 = projx_integrate_xt_to_x1(
+            manifold, odefunc, xt, t0, vt, method=method
+        )  # new cond
         x1_tm1 = manifold.abits_clamp(x1_tm1)
         xt = step_fn(
             odefunc, xt, vt, t0, dt, manifold=manifold if local_coords else None

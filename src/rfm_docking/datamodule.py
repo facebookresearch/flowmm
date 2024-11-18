@@ -45,6 +45,7 @@ class CrystDataModule(pl.LightningDataModule):
         coord_manifold: str,
         dataset_name: str,
         collate: DictConfig,
+        do_ot: bool,
         scaler_path=None,
     ):
         super().__init__()
@@ -65,7 +66,7 @@ class CrystDataModule(pl.LightningDataModule):
         # ...
         collate_class = get_class(collate._target_)
         self.collate_fn = collate_class(
-            manifold_getter=self.manifold_getter, do_ot=False
+            manifold_getter=self.manifold_getter, do_ot=do_ot
         )
 
         self.get_scaler(scaler_path)
