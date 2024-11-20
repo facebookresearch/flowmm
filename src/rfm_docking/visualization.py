@@ -35,7 +35,9 @@ def create_gif_from_traj(
 ):
     data = torch.load(traj_file, map_location="cpu")
 
-    lattice = data["lattices"]
+    index = 0
+    data = data[0]
+    lattice = data["lattices"][index]
 
     osda = data["osda"]
     osda_atoms = osda["atom_types"]
@@ -143,6 +145,9 @@ def vis_struc(atoms, frac_coords, lattice, name):
 
 
 if __name__ == "__main__":
+
+    # malte 
+    
     # show_ground_truth(536467517)
     traj_file = "/home/malte/flowmm/runs/trash/2024-12-01/11-34-47/docking_only_coords-dock_cspnet-te07cq7v/536399918_traj.pt"
     crystal_id = traj_file.split("/")[-1].split("_")[0]
@@ -152,3 +157,23 @@ if __name__ == "__main__":
         traj_file=traj_file,  # "/home/malte/flowmm/runs/trash/2024-11-26/14-30-27/docking_only_coords-dock_cspnet-iohsk2ru/traj.pt",
         output_gif=f"{crystal_id}.gif",
     )
+
+    # mrx 
+
+    # create_gif_from_traj(
+    #     # traj_file="/home/malte/flowmm/runs/trash/2024-11-08/15-09-58/docking_only_coords-rfm_cspnet-at6o35i2/traj.pt",
+
+    #     # initial getting to know the code - traj looks good
+    #     # traj_file="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-12/11-28-32/docking_only_coords-dock_cspnet-6g97h5qt/traj.pt",
+    #     # output_gif="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-12/11-28-32/docking_only_coords-dock_cspnet-6g97h5qt/traj.gif",
+
+    #     # added be code without the training and inference part - check traj is still ok 
+    #     # traj_file="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-15/12-51-09/docking_only_coords-dock_cspnet-uw81j9t7/traj.pt",
+    #     # output_gif="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-15/12-51-09/docking_only_coords-dock_cspnet-uw81j9t7/traj.gif",
+
+    #     # training code added
+    #     traj_file="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-15/16-45-05/docking_only_coords-dock_cspnet-s368tr0o/traj.pt",
+    #     output_gif="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-15/16-45-05/docking_only_coords-dock_cspnet-s368tr0o/traj.gif",
+
+    #     # inference code added but it does not output traj - todo mrx figure this out
+    # )

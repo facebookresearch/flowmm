@@ -159,11 +159,16 @@ class DockingCSPNet(DiffCSPNet):
         dim_atomic_rep: int = NUM_ATOMIC_TYPES,
         self_edges: bool = True,
         self_cond: bool = False,
+        be_dim: int = 256, 
+        drop_be_prob: float = 0.0, 
     ):
         nn.Module.__init__(self)
 
         self.n_space = n_space
         self.time_emb = nn.Linear(1, time_dim, bias=False)
+        self.be_emb = nn.Linear(1, be_dim, bias=False)
+        self.drop_be_prob = drop_be_prob
+        print("debug mrx drop_be_prob", drop_be_prob)
 
         self.self_cond = self_cond
         if self_cond:
@@ -179,7 +184,7 @@ class DockingCSPNet(DiffCSPNet):
         self.node_embedding = nn.Embedding(len(chemical_symbols), hidden_dim)
 
         self.atom_latent_emb = nn.Linear(
-            hidden_dim + time_dim,
+            hidden_dim + time_dim + be_dim,
             hidden_dim,
             bias=True,  # False
         )
@@ -206,6 +211,9 @@ class DockingCSPNet(DiffCSPNet):
 
         # it makes sense to have no bias here since p(F) is translation invariant
         self.coord_out = nn.Linear(hidden_dim, n_space, bias=False)
+
+        # readout block for binding energy TODO mrx add options: osda only, zeolite only, osda concat zeolite, osda + zeolite. Check padding as well
+        self.be_out = nn.Linear(hidden_dim, 1, bias=True)
 
         self.cutoff = cutoff
         self.max_neighbors = max_neighbors
@@ -284,6 +292,18 @@ class DockingCSPNet(DiffCSPNet):
         t_emb = t_emb.expand(
             batch.osda.num_atoms.shape[0], -1
         )  # if there is a single t, repeat for the batch
+
+        be_in = batch.y['bindingatoms'].float() # TODO mrx is it okay to put float here
+        with torch.no_grad(): # TODO mrx do we need this
+            be_in = torch.where(
+                torch.rand_like(be_in) < self.drop_be_prob,
+                torch.zeros_like(be_in),
+                be_in,
+            )
+        be_emb = self.be_emb(be_in.view(-1, 1)) 
+        be_emb = be_emb.expand(
+            batch.osda.num_atoms.shape[0], -1
+        )  
 
         # create graph
         # for osda
@@ -371,11 +391,14 @@ class DockingCSPNet(DiffCSPNet):
         t_per_atom = t_emb.repeat_interleave(
             batch.osda.num_atoms.to(t_emb.device), dim=0
         )
-
+        be_per_atom = be_emb.repeat_interleave(
+            batch.osda.num_atoms.to(t_emb.device), dim=0
+        )        
         osda_node_features = torch.cat(
             [
                 osda_node_features,
                 t_per_atom,
+                be_per_atom,
             ],
             dim=1,
         )
@@ -386,7 +409,11 @@ class DockingCSPNet(DiffCSPNet):
         t_per_atom = t_emb.repeat_interleave(
             batch.zeolite.num_atoms.to(t_emb.device), dim=0
         )
-        zeolite_node_features = torch.cat([zeolite_node_features, t_per_atom], dim=1)
+        be_per_atom = be_emb.repeat_interleave(
+            batch.zeolite.num_atoms.to(t_emb.device), dim=0
+        )
+
+        zeolite_node_features = torch.cat([zeolite_node_features, t_per_atom, be_per_atom], dim=1)
         zeolite_node_features = self.atom_latent_emb(zeolite_node_features)
 
         for i in range(0, self.num_layers):
@@ -445,7 +472,16 @@ class DockingCSPNet(DiffCSPNet):
         # predict coords
         coord_out = self.coord_out(osda_node_features)
 
-        return coord_out
+        # predict binding energy
+        osda_node_features = scatter(
+            osda_node_features,
+            batch.osda.batch,
+            dim=0,
+            reduce="mean",
+            )
+        be_out = self.be_out(osda_node_features)
+
+        return coord_out, be_out
 
 
 class ProjectedConjugatedCSPNet(nn.Module):
@@ -474,7 +510,8 @@ class ProjectedConjugatedCSPNet(nn.Module):
         batch: HeteroData,
         t: torch.Tensor,
         x: torch.Tensor,
-        cond: torch.Tensor | None,
+        cond_coords: torch.Tensor | None,
+        cond_be: torch.Tensor | None,
     ) -> ManifoldGetterOut:
         # handle osda first
         osda_frac_coords = self.manifold_getter.flatrep_to_georep(
@@ -485,9 +522,9 @@ class ProjectedConjugatedCSPNet(nn.Module):
         batch.osda.frac_coords = osda_frac_coords.f
 
         if self.self_cond:
-            if cond is not None:
-                fc_cond = self.manifold_getter.flatrep_to_georep(
-                    cond,
+            if cond_coords is not None:
+                fc_cond = self.manifold_getter.flatrep_to_georep( 
+                    cond_coords,
                     dims=batch.osda.dims,
                     mask_f=batch.osda.mask_f,
                 )
@@ -496,11 +533,17 @@ class ProjectedConjugatedCSPNet(nn.Module):
             else:
                 fc_cond = torch.zeros_like(osda_frac_coords)
 
+            if cond_be is None: 
+                cond_be = torch.zeros_like(batch.y['bindingatoms'])
+
             batch.osda.frac_coords = torch.cat(
                 [batch.osda.frac_coords, fc_cond], dim=-1
             )
+            batch.y['bindingatoms'] = torch.cat(
+                [batch.y['bindingatoms'], cond_be], dim=-1
+            )
 
-        coord_out = self.cspnet(
+        coord_out, be_out = self.cspnet(
             batch,
             t,
         )
@@ -509,7 +552,7 @@ class ProjectedConjugatedCSPNet(nn.Module):
             batch=batch.osda.batch,
             frac_coords=coord_out,
             split_manifold=False,
-        )
+        ), be_out
 
     def forward(
         self,
@@ -517,7 +560,9 @@ class ProjectedConjugatedCSPNet(nn.Module):
         t: torch.Tensor,
         x: torch.Tensor,
         manifold: Manifold,
-        cond: torch.Tensor | None = None,
+        cond_coords: torch.Tensor | None = None,
+        cond_be: torch.Tensor | None = None,
+        guidance_strength = 0.0, 
     ) -> torch.Tensor:
         """u_t: [0, 1] x M -> T M
 
@@ -525,17 +570,35 @@ class ProjectedConjugatedCSPNet(nn.Module):
         `flat -> flat_manifold -> pytorch_geom -(nn)-> pytorch_geom -> flat_tangent_estimate -> flat_tangent`
         """
         x = manifold.projx(x)
-        if cond is not None:
-            cond = manifold.projx(cond)
-        v, *_ = self._conjugated_forward(
+        if cond_coords is not None:
+            cond_coords = manifold.projx(cond_coords)
+
+        (v, *_), be = self._conjugated_forward(
             batch,
             t,
             x,
-            cond,
+            cond_coords,
+            cond_be
         )
+
+        if guidance_strength == 0.0: 
+            for prop in batch.y.keys():
+                batch.y[prop] = torch.zeros_like(batch.y[prop]).to(x.device)
+            (guid_v, *guid_), guid_be = self._conjugated_forward(
+                batch,
+                t,
+                x,
+                cond_coords,
+                cond_be
+            )
+            v = v + guidance_strength * guid_v
+            guid_strength_tot = guidance_strength + 1 
+            be = be / guid_strength_tot + guid_be * guidance_strength / guid_strength_tot # TODO mrx try this at first pass 
+
+
         # NOTE comment out to predict position directly
         v = manifold.proju(x, v)
 
         if self.metric_normalized and hasattr(manifold, "metric_normalized"):
             v = manifold.metric_normalized(x, v)
-        return v
+        return v, be

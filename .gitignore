@@ -181,3 +181,4 @@ cython_debug/
 #.idea/
 
 data/
+lightning_logs/

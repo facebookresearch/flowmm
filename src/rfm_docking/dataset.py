@@ -140,7 +140,11 @@ def process_one(args):
     )
     opt_osda_graph_arrays = build_crystal_graph(opt_osda, graph_method)
 
-    properties = {k: row[k] for k in prop_list if k in row.keys()}
+    properties = dict() 
+    for k in prop_list:
+        if k in row.keys():
+            properties[k] = torch.tensor(row[k], dtype=torch.float64)
+    
     preprocessed_dict = {
         "crystal_id": crystal_id,
         "smiles": smiles,
@@ -183,6 +187,9 @@ def custom_preprocess(
             ):
                 yield item
 
+    # NOTE uncomment to debug process_one
+    # process_one((df.iloc[0], graph_method, prop_list))
+    
     # Convert the unordered results to a list
     unordered_results = list(parallelized())
 
@@ -249,7 +256,7 @@ class CustomCrystDataset(Dataset):
         self.node_feat_dims = node_feat_dims
         self.edge_feat_dims = edge_feat_dims
 
-        self.preprocess(save_path, preprocess_workers, prop)
+        self.preprocess(save_path, preprocess_workers, prop) # prop = ['bindingatoms']
 
         # add_scaled_lattice_prop(self.cached_data, lattice_scale_method)
         # TODO not sure if how to scale osda lattice - should it be different from zeolite, or scale their combined cell?
@@ -280,11 +287,11 @@ class CustomCrystDataset(Dataset):
                 niggli=self.niggli,
                 primitive=self.primitive,
                 graph_method=self.graph_method,
-                prop_list=[prop],
+                prop_list=prop, 
                 use_space_group=self.use_space_group,
                 tol=self.tolerance,
             )
-
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
             torch.save(cached_data, save_path)
             self.cached_data = cached_data
 
@@ -295,7 +302,10 @@ class CustomCrystDataset(Dataset):
         data_dict = self.cached_data[index]
 
         # scaler is set in DataModule set stage
-        prop = self.scaler.transform(data_dict[self.prop])
+        prop = dict()
+        for p in self.prop: 
+            # print(p, type(data_dict[p]))
+            prop[p] = self.scaler[p].transform(data_dict[p]).view(1, -1)
         (
             frac_coords,
             atom_types,
@@ -328,7 +338,7 @@ class CustomCrystDataset(Dataset):
             num_atoms=num_atoms,
             num_bonds=osda_edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-            y=prop.view(1, -1),
+            # y=prop.view(1, -1), # TODO mrx prop is now a dict so this will fail
         )
 
         (
@@ -412,7 +422,7 @@ class CustomCrystDataset(Dataset):
             num_atoms=num_atoms,
             num_bonds=edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-            y=prop.view(1, -1),
+            # y=prop.view(1, -1), # TODO mrx prop is now a dict so this will fail
         )
 
         data = HeteroData()
@@ -426,6 +436,7 @@ class CustomCrystDataset(Dataset):
         data.num_atoms = osda_data.num_atoms + zeolite_data.num_atoms
         data.lengths = data.zeolite.lengths
         data.angles = data.zeolite.angles
+        data.y = prop # NOTE dictionary
 
         return data
 

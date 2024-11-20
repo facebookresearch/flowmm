@@ -20,6 +20,7 @@ def dock_collate_fn(
     batch = Batch.from_data_list(batch)
 
     # batch data
+    y = batch.y # NOTE dictionary of properties
     osda = batch.osda
     zeolite = batch.zeolite
 
@@ -107,6 +108,7 @@ def dock_collate_fn(
         dims=osda_dims,
         mask_f=osda_mask_f,
         batch=osda.batch,
+        y=y,
     )
     return batch
 
