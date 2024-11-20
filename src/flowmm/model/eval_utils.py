@@ -134,7 +134,8 @@ def load_model(
     atol: float = None,
     rtol: float = None,
 ) -> "flowmm.model.model_pl.MaterialsRFMLitModule":
-    from flowmm.model.model_pl import MaterialsRFMLitModule
+    # from flowmm.model.model_pl import MaterialsRFMLitModule
+    from rfm_docking.dock.model_pl import DockingRFMLitModule
 
     checkpoint = str(Path(checkpoint).resolve())
     chkpnt = torch.load(checkpoint, map_location="cpu")
@@ -149,7 +150,7 @@ def load_model(
     if rtol is not None:
         cfg.model.rtol = rtol
 
-    model = MaterialsRFMLitModule(cfg)
+    model = DockingRFMLitModule(cfg)
     model.load_state_dict(chkpnt["state_dict"])
     return cfg, model
 

@@ -14,6 +14,7 @@ def collate_fn(
     batch = Batch.from_data_list(batch)
 
     # batch data
+    y = batch.y # NOTE dictionary of properties
     osda = batch.osda
     zeolite = batch.zeolite
 
@@ -76,5 +77,9 @@ def collate_fn(
     batch.x0 = x0
     batch.x1 = x1
     batch.lattices = lattices
+    batch.y = y
+    # NOTE alternative
+    # for key, value in y.items(): 
+    #     batch[key] = value
 
     return batch

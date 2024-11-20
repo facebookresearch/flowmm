@@ -23,7 +23,7 @@ def create_gif_from_cif(
 ):
     data = torch.load(traj_file)
 
-    index = 2
+    index = 0
     data = data[0]
     lattice = data["lattices"][index]
 
@@ -64,6 +64,19 @@ def create_gif_from_cif(
 
 if __name__ == "__main__":
     create_gif_from_cif(
-        traj_file="/home/malte/flowmm/runs/trash/2024-11-08/15-09-58/docking_only_coords-rfm_cspnet-at6o35i2/traj.pt",
-        output_gif="RFM_EMM17_3_zeolite.gif",
+        # traj_file="/home/malte/flowmm/runs/trash/2024-11-08/15-09-58/docking_only_coords-rfm_cspnet-at6o35i2/traj.pt",
+
+        # initial getting to know the code - traj looks good
+        # traj_file="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-12/11-28-32/docking_only_coords-dock_cspnet-6g97h5qt/traj.pt",
+        # output_gif="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-12/11-28-32/docking_only_coords-dock_cspnet-6g97h5qt/traj.gif",
+
+        # added be code without the training and inference part - check traj is still ok 
+        # traj_file="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-15/12-51-09/docking_only_coords-dock_cspnet-uw81j9t7/traj.pt",
+        # output_gif="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-15/12-51-09/docking_only_coords-dock_cspnet-uw81j9t7/traj.gif",
+
+        # training code added
+        traj_file="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-15/16-45-05/docking_only_coords-dock_cspnet-s368tr0o/traj.pt",
+        output_gif="/home/mrx/projects/osda_inpaint/flowmm/runs/trash/2024-11-15/16-45-05/docking_only_coords-dock_cspnet-s368tr0o/traj.gif",
+
+        # inference code added but it does not output traj - todo mrx figure this out
     )
