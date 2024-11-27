@@ -6,7 +6,7 @@ core:
 
 logging:
   # log frequency
-  val_check_interval: 1
+  val_check_interval: 2
   wandb:
     project: rfmcsp-${model.target_distribution}-${hydra:runtime.choices.data}
     entity: null
@@ -83,8 +83,8 @@ test:
 
 integrate:
   div_mode: rademacher  # "exact" is an alternative
-  method: euler
-  num_steps: 100 # 0_100 
+  method: heun # euler
+  num_steps: 500 # 0_100 
   normalize_loglik: True  # this is normalized by dimension
   inference_anneal_slope: 0.0
   inference_anneal_offset: 0.0
@@ -92,7 +92,7 @@ integrate:
 
 defaults:
   - _self_
-  - data: docking
+  - data: dock_and_optimize
   - model: docking_only_coords # null_params_for_testing # docking_only_coords
-  - vectorfield: dock_cspnet # cspnet # rfm_cspnet 
+  - vectorfield: dock_and_optimize_cspnet # cspnet # rfm_cspnet 
   - hydra: trash

@@ -5,17 +5,20 @@ from scipy.optimize import LinearConstraint, Bounds, milp
 from flowmm.rfm.manifolds.flat_torus import FlatTorus01
 
 
-def ot_reassignment(x0, x1, batch, cost="geodesic"):
-    """Matches points in x0 to points in x1 using ot with strict one-to-one matching and class constraint."""
+def ot_reassignment(x0, x1, classes, cost="geodesic"):
+    """Matches points in x0 to points in x1 using ot with strict one-to-one matching and classes constraint."""
     # Convert torch tensors to numpy arrays for compatibility with pot and scipy
 
     assert x0.shape[0] == x1.shape[0], (
         "x0 and x1 must have the same number of points!" ""
     )
+    assert (
+        x0.shape[-1] == 3
+    ), "x0 and x1 must be georep, i.e. must have shape (n_points, 3)!"
 
     x0 = x0.cpu()
     x1 = x1.cpu()
-    batch = batch.cpu().numpy()
+    classes = classes.cpu().numpy()
 
     # Compute the cost matrix (pairwise squared Euclidean distance)
     if cost == "geodesic":
@@ -43,16 +46,17 @@ def ot_reassignment(x0, x1, batch, cost="geodesic"):
     b_l = []
     b_u = []
 
-    max_batch = max(batch) + 1
-    for i in range(max_batch):
-        # assign the correct number of points from each batch
-        mask = (batch == i).nonzero()[0]
-        points_per_batch = (batch == i).sum()
-        batch_constraint = np.zeros(cost_matrix.shape)
-        batch_constraint[mask[:, None], mask] = 1
-        A.append(batch_constraint.reshape((1, -1)))
-        b_l.append(points_per_batch)
-        b_u.append(points_per_batch)
+    # torch.unique to make it more flexible
+    # this way it doesnt matter if there are gaps in the classes
+    for i in np.unique(classes):
+        # assign the correct number of points from each classes
+        mask = (classes == i).nonzero()[0]
+        points_per_class = (classes == i).sum()
+        class_constraint = np.zeros(cost_matrix.shape)
+        class_constraint[mask[:, None], mask] = 1
+        A.append(class_constraint.reshape((1, -1)))
+        b_l.append(points_per_class)
+        b_u.append(points_per_class)
 
         """
         Looks like this if i = 0
@@ -65,7 +69,7 @@ def ot_reassignment(x0, x1, batch, cost="geodesic"):
         b1 a5   0  0  0  0  0
         ...
 
-        if batch = 1
+        if classes = 1
         Looks like this if i = 0
                b0 b0 b1 b1 b1  ...
                a1 a2 a3 a4 a5  ...
@@ -124,7 +128,8 @@ def ot_reassignment(x0, x1, batch, cost="geodesic"):
     best_assignment = res.x.reshape(cost_matrix.shape)
     _, col_indices = np.where(best_assignment == 1)
 
-    return torch.tensor(col_indices, dtype=torch.long)
+    cost = res.fun
+    return cost, torch.tensor(col_indices, dtype=torch.long)
 
 
 if __name__ == "__main__":
@@ -132,15 +137,15 @@ if __name__ == "__main__":
     x0 = (1 / 4) * torch.tensor([[0, 0], [1, 1], [2, 2], [3, 3], [4, 4]])
     x1 = (1 / 4) * torch.tensor([[1, 1], [0, 0], [3, 3], [2, 2], [4, 4]])
 
-    batch = torch.tensor([0, 0, 1, 1, 1])
+    classes = torch.tensor([0, 0, 1, 1, 1])
 
-    euclidean_result = ot_reassignment(x0, x1, batch, cost="euclidean")
+    euclidean_result = ot_reassignment(x0, x1, classes, cost="euclidean")
     assert torch.all(euclidean_result == torch.tensor([1, 0, 3, 2, 4]))
 
     print(euclidean_result)
 
     x0 = torch.tensor([[0.95, 0.95], [0.9, 0.9], [0.85, 0.85], [0.1, 0.1], [0.2, 0.2]])
     x1 = torch.tensor([[0.025, 0.025], [0.1, 0.1], [0.3, 0.3], [0.8, 0.8], [0.9, 0.9]])
-    batch = torch.tensor([0, 0, 0, 1, 1])
+    classes = torch.tensor([0, 0, 0, 1, 1])
 
-    print(ot_reassignment(x0, x1, batch, cost="geodesic"))
+    print(ot_reassignment(x0, x1, classes, cost="geodesic"))

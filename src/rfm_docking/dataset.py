@@ -92,7 +92,7 @@ def process_one(args):
     )
     dock_osda_graph_arrays = build_crystal_graph(dock_osda, graph_method)
 
-    """### process the optimized structures
+    ### process the optimized structures
     opt_axyz = eval(row.opt_xyz)
     opt_zeolite_axyz, opt_ligand_axyz = split_zeolite_and_osda_pos(
         opt_axyz, smiles, loading
@@ -121,7 +121,7 @@ def process_one(args):
         species=opt_osda_atoms,
         coords_are_cartesian=True,
     )
-    opt_osda_graph_arrays = build_crystal_graph(opt_osda, graph_method)"""
+    opt_osda_graph_arrays = build_crystal_graph(opt_osda, graph_method)
 
     properties = dict() 
     for k in prop_list:
@@ -135,8 +135,8 @@ def process_one(args):
         "osda_feats": (node_feats, edge_feats, edge_index),
         "dock_zeolite_graph_arrays": dock_zeolite_graph_arrays,
         "dock_osda_graph_arrays": dock_osda_graph_arrays,
-        # "opt_zeolite_graph_arrays": opt_zeolite_graph_arrays,
-        # "opt_osda_graph_arrays": opt_osda_graph_arrays,
+        "opt_zeolite_graph_arrays": opt_zeolite_graph_arrays,
+        "opt_osda_graph_arrays": opt_osda_graph_arrays,
     }
     preprocessed_dict.update(properties)
     return preprocessed_dict
@@ -245,6 +245,14 @@ class CustomCrystDataset(Dataset):
         custom_add_scaled_lattice_prop(
             self.cached_data, lattice_scale_method, "dock_osda_graph_arrays"
         )
+
+        custom_add_scaled_lattice_prop(
+            self.cached_data, lattice_scale_method, "opt_zeolite_graph_arrays"
+        )
+        custom_add_scaled_lattice_prop(
+            self.cached_data, lattice_scale_method, "opt_osda_graph_arrays"
+        )
+
         self.lattice_scaler = None
         self.scaler = None
 
@@ -335,11 +343,64 @@ class CustomCrystDataset(Dataset):
             # y=prop.view(1, -1), # TODO mrx prop is now a dict so this will fail
         )
 
+        (
+            frac_coords,
+            atom_types,
+            lengths,
+            angles,
+            edge_indices,  # NOTE edge indices will be overwritten with rdkit featurization
+            to_jimages,
+            num_atoms,
+        ) = data_dict["opt_osda_graph_arrays"]
+
+        osda_data_opt = Data(
+            frac_coords=torch.Tensor(frac_coords),
+            atom_types=torch.LongTensor(atom_types),
+            lengths=torch.Tensor(lengths).view(1, -1),
+            angles=torch.Tensor(angles).view(1, -1),
+            edge_index=torch.LongTensor(
+                edge_indices.T
+            ).contiguous(),  # shape (2, num_edges)
+            to_jimages=torch.LongTensor(to_jimages),
+            num_atoms=num_atoms,
+            num_bonds=edge_indices.shape[0],
+            num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
+            y=prop.view(1, -1),
+            conformer=data_dict["conformer"] if "conformer" in data_dict else None,
+        )
+
+        (
+            frac_coords,
+            atom_types,
+            lengths,
+            angles,
+            edge_indices,
+            to_jimages,
+            num_atoms,
+        ) = data_dict["opt_zeolite_graph_arrays"]
+
+        zeolite_data_opt = Data(
+            frac_coords=torch.Tensor(frac_coords),
+            atom_types=torch.LongTensor(atom_types),
+            lengths=torch.Tensor(lengths).view(1, -1),
+            angles=torch.Tensor(angles).view(1, -1),
+            edge_index=torch.LongTensor(
+                edge_indices.T
+            ).contiguous(),  # shape (2, num_edges)
+            to_jimages=torch.LongTensor(to_jimages),
+            num_atoms=num_atoms,
+            num_bonds=edge_indices.shape[0],
+            num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
+            y=prop.view(1, -1),
+        )
+
         data = HeteroData()
         data.crystal_id = data_dict["crystal_id"]
         data.smiles = smiles
         data.osda = osda_data
+        data.osda_opt = osda_data_opt
         data.zeolite = zeolite_data
+        data.zeolite_opt = zeolite_data_opt
         data.num_atoms = osda_data.num_atoms + zeolite_data.num_atoms
         data.lengths = data.zeolite.lengths
         data.angles = data.zeolite.angles

@@ -1,0 +1,90 @@
+dataset_name: docking
+dim_coords: 3
+root_path: ${oc.env:PROJECT_ROOT}/data
+prop: affinity
+num_targets: 1
+# prop: scaled_lattice
+# num_targets: 6
+niggli: false
+primitive: false
+graph_method: crystalnn
+lattice_scale_method: scale_length
+preprocess_workers: 20
+readout: mean
+max_atoms: 1000
+otf_graph: false
+eval_model_name: docking
+tolerance: 0.1
+
+use_space_group: false
+use_pos_index: false
+train_max_epochs: 10
+early_stopping_patience: 100000
+teacher_forcing_max_epoch: 1000
+
+datamodule:
+  _target_: src.rfm_docking.datamodule.CrystDataModule
+
+  datasets:
+    train:
+      _target_: src.rfm_docking.dataset.CustomCrystDataset
+      name: Formation energy train
+      path: ${data.root_path}/5examples.csv
+      save_path: ${data.root_path}/train.pt
+      prop: ${data.prop}
+      niggli: ${data.niggli}
+      primitive: ${data.primitive}
+      graph_method: ${data.graph_method}
+      tolerance: ${data.tolerance}
+      use_space_group: ${data.use_space_group}
+      use_pos_index: ${data.use_pos_index}
+      lattice_scale_method: ${data.lattice_scale_method}
+      preprocess_workers: ${data.preprocess_workers}
+
+    val:
+      - _target_: src.rfm_docking.dataset.CustomCrystDataset
+        name: Formation energy val
+        path: ${data.root_path}/5examples.csv
+        save_path: ${data.root_path}/val.pt
+        prop: ${data.prop}
+        niggli: ${data.niggli}
+        primitive: ${data.primitive}
+        graph_method: ${data.graph_method}
+        tolerance: ${data.tolerance}
+        use_space_group: ${data.use_space_group}
+        use_pos_index: ${data.use_pos_index}
+        lattice_scale_method: ${data.lattice_scale_method}
+        preprocess_workers: ${data.preprocess_workers}
+
+    test:
+      - _target_: src.rfm_docking.dataset.CustomCrystDataset
+        name: Formation energy test
+        path: ${data.root_path}/5examples.csv
+        save_path: ${data.root_path}/test.pt
+        prop: ${data.prop}
+        niggli: ${data.niggli}
+        primitive: ${data.primitive}
+        graph_method: ${data.graph_method}
+        tolerance: ${data.tolerance}
+        use_space_group: ${data.use_space_group}
+        use_pos_index: ${data.use_pos_index}
+        lattice_scale_method: ${data.lattice_scale_method}
+        preprocess_workers: ${data.preprocess_workers}
+
+  num_workers:
+    train: 8
+    val: 4
+    test: 4
+
+  batch_size:
+    train: 6
+    val: 6
+    test: 6
+
+  coord_manifold: ${model.manifold_getter.coord_manifold}
+  dataset_name: ${data.dataset_name}
+
+  collate:
+    _target_: src.rfm_docking.dock_and_optimize.collate.DockAndOptimizeCollater
+
+  do_ot: True

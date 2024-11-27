@@ -7,7 +7,9 @@ import warnings
 from functools import partial
 from typing import Any, Literal
 
+import time
 import hydra
+from hydra.utils import get_class
 import pytorch_lightning as pl
 import torch
 from scipy.spatial.transform import Rotation as R
@@ -32,12 +34,10 @@ from flowmm.model.solvers import (
 )
 from flowmm.model.standardize import get_affine_stats
 from rfm_docking.manifold_getter import DockingManifoldGetter, Dims
-from rfm_docking.dock.arch import DockingCSPNet, ProjectedConjugatedCSPNet
-from rfm_docking.reassignment import ot_reassignment
-from rfm_docking.utils import sample_mol_in_frac
 from flowmm.rfm.manifolds.spd import SPDGivenN, SPDNonIsotropicRandom
 from flowmm.rfm.vmap import VMapManifolds
 from flowmm.rfm.manifolds.flat_torus import FlatTorus01
+from rfm_docking.reassignment import ot_reassignment
 
 
 def output_and_div(
@@ -75,11 +75,13 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             total_cost = sum([v for v in self.costs.values()])
             self.costs = {k: v / total_cost for k, v in self.costs.items()}
 
-        model: DockingCSPNet = hydra.utils.instantiate(
-            self.cfg.vectorfield, _convert_="partial"
+        model = hydra.utils.instantiate(
+            self.cfg.vectorfield.vectorfield, _convert_="partial"
         )
+
+        conjugate_model_class = get_class(self.cfg.vectorfield.conjugate_model._target_)
         # Model of the vector field.
-        cspnet = ProjectedConjugatedCSPNet(
+        cspnet = conjugate_model_class(
             cspnet=model,
             manifold_getter=self.manifold_getter,
             coord_affine_stats=get_affine_stats(
@@ -183,7 +185,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             dims,
             mask_f,
         ) = self.manifold_getter.from_empty_batch(
-            batch.osda.batch, dim_coords, split_manifold=True
+            batch.batch, dim_coords, split_manifold=True
         )
         num_atoms = self.manifold_getter._get_num_atoms(mask_f)
 
@@ -216,14 +218,14 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             dims,
             mask_f,
         ) = self.manifold_getter.from_only_atom_types(
-            batch.osda.batch, atom_types, dim_coords, split_manifold=True
+            batch.batch, atom_types, dim_coords, split_manifold=True
         )
         num_atoms = self.manifold_getter._get_num_atoms(mask_f)
 
         if x0 is None:
-            x0 = manifold.random(*shape, device=batch.osda.batch.device)
+            x0 = manifold.random(*shape, device=batch.batch.device)
         else:
-            x0 = x0.to(device=batch.osda.batch.device)
+            x0 = x0.to(device=batch.batch.device)
 
         return self.finish_sampling(
             batch=batch,
@@ -461,21 +463,21 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         x0 = batch.x0
         x1 = batch.x1
 
-        osda_manifold = batch.osda.manifold
+        manifold = batch.manifold
 
         N = x1.shape[0]
 
         t = torch.rand(N, dtype=x1.dtype, device=x1.device).reshape(-1, 1)
 
-        x1 = osda_manifold.projx(x1)
+        x1 = manifold.projx(x1)
 
-        x_t, u_t = osda_manifold.cond_u(x0, x1, t)
+        x_t, u_t = manifold.cond_u(x0, x1, t)
         x_t = x_t.reshape(N, x0.shape[-1])
         u_t = u_t.reshape(N, x0.shape[-1])
 
         # this projects out the mean from the tangent vectors
         # our model cannot predict it, so keeping it in inflates the loss
-        u_t = osda_manifold.proju(x_t, u_t)
+        u_t = manifold.proju(x_t, u_t)
 
         cond_coords = None
         cond_be = None
@@ -487,10 +489,11 @@ class DockingRFMLitModule(ManifoldFMLitModule):
                         lambda t, x: vecfield(
                             t=torch.atleast_2d(t),
                             x=torch.atleast_2d(x),
-                            manifold=osda_manifold,
+                            manifold=manifold,
                         ),
                         x_t,
                         t,
+                        method=self.cfg.integrate.get("method", "euler"),
                     ).detach_()
 
         u_t_pred, be_pred = vecfield(
@@ -505,14 +508,14 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         # diff = FlatTorus01.logmap(u_t_pred, x1).abs()  # NOTE predict coordinate
         # loss_f = diff.mean()
 
-        max_num_atoms = batch.osda.mask_f.size(-1)
-        dim_f_per_atom = batch.osda.dims.f / max_num_atoms
+        max_num_atoms = batch.mask_f.size(-1)
+        dim_f_per_atom = batch.dims.f / max_num_atoms
 
         s = 0
-        e = batch.osda.dims.f
+        e = batch.dims.f
         # loss for each example in batch
         loss_f = (
-            batch.osda.f_manifold.inner(x_t[:, s:e], diff[:, s:e], diff[:, s:e])
+            batch.f_manifold.inner(x_t[:, s:e], diff[:, s:e], diff[:, s:e])
             / dim_f_per_atom
         )
         loss_f = loss_f.mean()
@@ -530,6 +533,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         }
 
     def training_step(self, batch: Data, batch_idx: int):
+        start_time = time.time()
         loss_dict = self.loss_fn(batch)
 
         if torch.isfinite(loss_dict["loss"]):
@@ -550,6 +554,18 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         # we can return here dict with any tensors
         # and then read it in some callback or in `training_epoch_end()` below
         # remember to always return loss from `training_step()` or else backpropagation will fail!
+        end_time = time.time()
+        execution_time = (end_time - start_time) / len(batch)
+
+        # Log the execution time per example
+        self.log(
+            "train_step_time_per_example",
+            execution_time,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+        )
+
         return loss_dict
 
     def training_epoch_end(self, outputs: list[Any]):
@@ -565,6 +581,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         compute_loss: bool,
         compute_nll: bool,
     ) -> dict[str, torch.Tensor]:
+        start_time = time.time()
         if stage not in ["val", "test"]:
             raise ValueError("stage must be 'val' or 'test'.")
         metrics = getattr(self, f"{stage}_metrics")
@@ -603,6 +620,17 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             metrics["nll"].update(nll.cpu())
             out.update(nll_dict)
 
+        end_time = time.time()
+        execution_time = (end_time - start_time) / len(batch)
+
+        # Log the execution time per example
+        self.log(
+            f"{stage}_step_time_per_example",
+            execution_time,
+            on_step=False,
+            on_epoch=True,
+            prog_bar=False,
+        )
         return out
 
     def compute_reconstruction(
@@ -611,11 +639,11 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         num_steps: int = 1_000,
     ) -> dict[str, torch.Tensor | Data]:
         *_, dims, mask_f = self.manifold_getter(
-            batch.osda.batch,
-            batch.osda.atom_types,
-            batch.osda.frac_coords,
-            batch.osda.lengths,
-            batch.osda.angles,
+            batch.batch,
+            batch.atom_types,
+            batch.frac_coords,
+            batch.lengths,
+            batch.angles,
             split_manifold=False,
         )
         if self.cfg.integrate.get("compute_traj_velo_norms", False):
@@ -690,7 +718,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         num_steps: int = 1_000,
     ) -> dict[str, torch.Tensor | Data]:
         *_, dims, mask_f = self.manifold_getter.from_empty_batch(
-            batch.osda.batch, dim_coords, split_manifold=False
+            batch.batch, dim_coords, split_manifold=False
         )
 
         if self.cfg.integrate.get("compute_traj_velo_norms", False):
@@ -703,13 +731,13 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             norms = {}
         frac_coords = self.manifold_getter.flatrep_to_crystal(recon, dims, mask_f)
         out = {
-            "atom_types": batch.osda.atom_types,
+            "atom_types": batch.atom_types,
             "frac_coords": frac_coords,
             "lattices": batch.lattices,
             "lengths": batch.lattices[:, :3],
             "angles": batch.lattices[:, 3:],
-            "num_atoms": batch.osda.num_atoms,
-            "input_data_batch": batch.osda.batch,
+            "num_atoms": batch.num_atoms,
+            "input_data_batch": batch.batch,
         }
         out.update(norms)
         return out
@@ -721,12 +749,12 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         num_steps: int = 1_000,
     ) -> dict[str, torch.Tensor | Data]:
         *_, dims, mask_f = self.manifold_getter.from_empty_batch(
-            batch.osda.batch, dim_coords, split_manifold=False
+            batch.batch, dim_coords, split_manifold=False
         )
 
         if self.cfg.integrate.get("compute_traj_velo_norms", False):
             recon, norms_a, norms_f, norms_l = self.gen_sample(
-                batch.osda.batch,
+                batch.batch,
                 dim_coords,
                 num_steps=num_steps,
                 entire_traj=True,
@@ -742,21 +770,103 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         for recon_step in recon:
             f = self.manifold_getter.flatrep_to_crystal(recon_step, dims, mask_f)
             frac_coords.append(f)
+        frac_coords = torch.stack(frac_coords, dim=0)
+
+        # below, we want to separate osda and zeolite trajectories for nicer visualization
+        # check if only osda coords are moving (= docking)
+        if batch.batch.shape[0] == batch.osda.num_atoms.sum():
+            is_osda = torch.ones_like(batch.batch, dtype=torch.bool)
+        # else we assume that both osda and zeolite coords are moving
+        else:
+            is_osda = torch.zeros((2 * (batch.batch.max() + 1)), dtype=torch.bool)
+            is_osda[::2] = 1
+
+            counts = torch.zeros_like(is_osda, dtype=torch.long)
+            counts[::2] = batch.osda.num_atoms
+            counts[1::2] = batch.zeolite.num_atoms
+
+            is_osda = torch.repeat_interleave(is_osda, counts)
 
         osda_traj = {
             "atom_types": batch.osda.atom_types,
             "target_coords": batch.osda.frac_coords,
-            "frac_coords": torch.stack(frac_coords, dim=0),
+            "frac_coords": frac_coords[:, is_osda],
             "num_atoms": batch.osda.num_atoms,
             "batch": batch.osda.batch,
         }
+
         zeolite = {
             "atom_types": batch.zeolite.atom_types,
-            "frac_coords": batch.zeolite.frac_coords,
+            "target_coords": batch.zeolite.frac_coords,
+            "frac_coords": frac_coords[:, ~is_osda],
             "batch": batch.zeolite.batch,
         }
+
+        # calculate osda rmsd (per batch per atom)
+        osda_rmsds = []
+        zeolite_rmsds = []
+        zeolite_gt_rmsds = []  # NOTE gt = ground truth
+        for i in range(batch.osda.batch.max() + 1):
+            lattice = lattice_params_to_matrix_torch(
+                batch.lattices[i, :3].view(1, -1), batch.lattices[i, 3:].view(1, -1)
+            ).squeeze()
+            target_frac_coords = osda_traj["target_coords"][batch.osda.batch == i] % 1.0
+            predicted_frac_coords = osda_traj["frac_coords"][-1, batch.osda.batch == i]
+
+            osda_rmsd_frac, reordered_target_idx = ot_reassignment(
+                # take the last frame
+                predicted_frac_coords,
+                target_frac_coords,
+                batch.osda.atom_types[batch.osda.batch == i],
+            )
+
+            osda_target_coords = target_frac_coords[reordered_target_idx]
+            osda_geodesic_frac = FlatTorus01.logmap(
+                predicted_frac_coords, osda_target_coords
+            )
+            osda_geodesic_cart = torch.matmul(osda_geodesic_frac, lattice)
+            osda_distance_cart = (osda_geodesic_cart**2).sum(-1).sqrt()
+
+            osda_rmsd = (osda_distance_cart**2).mean().sqrt()
+            osda_rmsds.append(osda_rmsd)
+
+            # calculate zeolite rmsd (per batch per atom) in cartesian space
+            zeolite_initial_coords = zeolite["frac_coords"][0, batch.zeolite.batch == i]
+            zeolite_coords = zeolite["frac_coords"][-1, batch.zeolite.batch == i]
+            zeolite_target_coords = (
+                zeolite["target_coords"][batch.zeolite.batch == i] % 1.0
+            )
+
+            zeolite_geodesic_frac = FlatTorus01.logmap(
+                zeolite_coords, zeolite_target_coords
+            )
+            zeolite_geodesic_cart = torch.matmul(zeolite_geodesic_frac, lattice)
+            zeolite_distance_cart = (zeolite_geodesic_cart**2).sum(-1).sqrt()
+
+            zeolite_rmsd = (zeolite_distance_cart**2).mean().sqrt()
+            zeolite_rmsds.append(zeolite_rmsd)
+
+            # Next, we calculate the ground truth rmsd for the zeolite, i.e. how much the atoms have moved during optimization
+            zeolite_gt_geodesic_frac = FlatTorus01.logmap(
+                zeolite_initial_coords, zeolite_target_coords
+            )
+            zeolite_gt_geodesic_cart = torch.matmul(zeolite_gt_geodesic_frac, lattice)
+            zeolite_gt_distance_cart = (zeolite_gt_geodesic_cart**2).sum(-1).sqrt()
+
+            zeolite_gt_rmsd = (zeolite_gt_distance_cart**2).mean().sqrt()
+            zeolite_gt_rmsds.append(zeolite_gt_rmsd)
+
+        osda_rmsds = torch.stack(osda_rmsds, dim=0)
+        zeolite_rmsds = torch.stack(zeolite_rmsds, dim=0)
+        zeolite_gt_rmsds = torch.stack(zeolite_gt_rmsds, dim=0)
+
+        osda_traj["rmsd"] = osda_rmsds
+        zeolite["rmsd"] = zeolite_rmsds
+        zeolite["ground_truth_rmsds"] = zeolite_gt_rmsds
+
         out = {
             "crystal_id": batch.crystal_id,
+            "smiles": batch.smiles,
             "osda_traj": osda_traj,
             "zeolite": zeolite,
             "lattices": batch.lattices,
@@ -793,7 +903,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             "lengths": batch.lengths,
             "angles": batch.angles,
             "num_atoms": batch.num_atoms,
-            "input_data_batch": batch,
+            "input_data_batch": batch.batch,
         }
         out.update(norms)
         return out
@@ -839,6 +949,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             test_metric.reset()
 
     def predict_step(self, batch: Any, batch_idx: int):
+        start_time = time.time()
         if not hasattr(batch, "frac_coords"):
             if self.cfg.integrate.get("entire_traj", False):
                 print("predict_step compute_gen_trajectory") 
@@ -868,6 +979,13 @@ class DockingRFMLitModule(ManifoldFMLitModule):
                     batch,
                     num_steps=self.cfg.integrate.get("num_steps", 1_000),
                 )
+
+        end_time = time.time()
+        execution_time = (end_time - start_time) / len(batch)
+
+        # NOTE logging not available in predict_step :/
+        out["predict_time_per_example"] = execution_time
+        return out
 
     def configure_optimizers(self):
         optimizer = hydra.utils.instantiate(
