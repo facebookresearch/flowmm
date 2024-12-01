@@ -1,7 +1,8 @@
 dataset_name: docking
 dim_coords: 3
 root_path: ${oc.env:PROJECT_ROOT}/data
-prop: affinity
+prop: 
+  - bindingatoms
 num_targets: 1
 # prop: scaled_lattice
 # num_targets: 6
@@ -15,6 +16,7 @@ max_atoms: 1000
 otf_graph: false
 eval_model_name: docking
 tolerance: 0.1
+task: dock_and_optimize
 
 use_space_group: false
 use_pos_index: false
@@ -40,6 +42,7 @@ datamodule:
       use_pos_index: ${data.use_pos_index}
       lattice_scale_method: ${data.lattice_scale_method}
       preprocess_workers: ${data.preprocess_workers}
+      task: ${data.task}
 
     val:
       - _target_: src.rfm_docking.dataset.CustomCrystDataset
@@ -55,6 +58,7 @@ datamodule:
         use_pos_index: ${data.use_pos_index}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
+        task: ${data.task}
 
     test:
       - _target_: src.rfm_docking.dataset.CustomCrystDataset
@@ -70,6 +74,7 @@ datamodule:
         use_pos_index: ${data.use_pos_index}
         lattice_scale_method: ${data.lattice_scale_method}
         preprocess_workers: ${data.preprocess_workers}
+        task: ${data.task}
 
   num_workers:
     train: 8

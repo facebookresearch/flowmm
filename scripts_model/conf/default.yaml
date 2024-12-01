@@ -6,7 +6,7 @@ core:
 
 logging:
   # log frequency
-  val_check_interval: 5
+  val_check_interval: 1
   wandb:
     project: rfmcsp-${model.target_distribution}-${hydra:runtime.choices.data}
     entity: null
@@ -69,7 +69,7 @@ train:
     save_last: False
 
   every_n_epochs_checkpoint:
-    every_n_epochs: 100
+    every_n_epochs: 1
     save_top_k: -1
     verbose: False
     save_last: False
@@ -83,8 +83,8 @@ test:
 
 integrate:
   div_mode: rademacher  # "exact" is an alternative
-  method: euler
-  num_steps: 50 # 0_100 
+  method: euler # heun
+  num_steps: 10 # 0_100 
   normalize_loglik: True  # this is normalized by dimension
   inference_anneal_slope: 0.0
   inference_anneal_offset: 0.0

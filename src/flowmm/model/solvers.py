@@ -5,7 +5,7 @@ from __future__ import annotations
 import torch
 from tqdm import tqdm
 
-from manifm.solvers import get_step_fn
+from rfm_docking.manifm.solvers import get_step_fn
 from flowmm.rfm.vmap import VMapManifolds
 
 

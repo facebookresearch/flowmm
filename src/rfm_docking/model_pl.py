@@ -345,7 +345,6 @@ class DockingRFMLitModule(ManifoldFMLitModule):
 
         elif entire_traj or compute_traj_velo_norms: 
             print(f"finish_sampling, {entire_traj} or {compute_traj_velo_norms}") # TODO mrx True, False
-            # breakpoint()
             xs, vs = projx_integrator(
                 manifold,
                 scheduled_fn_to_integrate, # NOTE odefunc
@@ -522,7 +521,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
         if self.cfg.model.self_cond:
             with torch.no_grad():
                 if torch.rand((1)) < 0.5:
-                    cond = projx_integrate_xt_to_x1(
+                    cond_coords, cond_be = projx_integrate_xt_to_x1(
                         manifold,
                         lambda t, x: vecfield(
                             t=torch.atleast_2d(t),
@@ -538,7 +537,8 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             t=t,
             x=x_t,
             manifold=manifold,
-            cond=cond,
+            cond_coords=cond_coords,
+            cond_be=cond_be,
         )
         # maybe adjust the target
         diff = u_t_pred - u_t
@@ -601,6 +601,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             on_step=False,
             on_epoch=True,
             prog_bar=False,
+            batch_size=len(batch),
         )
 
         return loss_dict
@@ -667,7 +668,8 @@ class DockingRFMLitModule(ManifoldFMLitModule):
             on_step=False,
             on_epoch=True,
             prog_bar=False,
-        )
+            batch_size=len(batch)
+            )
         return out
 
     def compute_reconstruction(
@@ -870,27 +872,33 @@ class DockingRFMLitModule(ManifoldFMLitModule):
 
             osda_rmsd = (osda_distance_cart**2).mean().sqrt()
 
-            # calculate zeolite rmsd (per batch per atom) in cartesian space
-            zeolite_initial_coords = zeolite["frac_coords"][0]
-            zeolite_coords = zeolite["frac_coords"][-1]
-            zeolite_target_coords = zeolite["target_coords"]
+            if not all(is_osda):
+                # calculate zeolite rmsd (per batch per atom) in cartesian space
+                zeolite_initial_coords = zeolite["frac_coords"][0]
+                zeolite_coords = zeolite["frac_coords"][-1]
+                zeolite_target_coords = zeolite["target_coords"]
 
-            zeolite_geodesic_frac = FlatTorus01.logmap(
-                zeolite_coords, zeolite_target_coords
-            )
-            zeolite_geodesic_cart = torch.matmul(zeolite_geodesic_frac, lattice)
-            zeolite_distance_cart = (zeolite_geodesic_cart**2).sum(-1).sqrt()
+                zeolite_geodesic_frac = FlatTorus01.logmap(
+                    zeolite_coords, zeolite_target_coords
+                )
+                zeolite_geodesic_cart = torch.matmul(zeolite_geodesic_frac, lattice)
+                zeolite_distance_cart = (zeolite_geodesic_cart**2).sum(-1).sqrt()
 
-            zeolite_rmsd = (zeolite_distance_cart**2).mean().sqrt()
+                zeolite_rmsd = (zeolite_distance_cart**2).mean().sqrt()
+                zeolite_rmsds.append(zeolite_rmsd)
 
-            # Next, we calculate the ground truth rmsd for the zeolite, i.e. how much the atoms have moved during optimization
-            zeolite_gt_geodesic_frac = FlatTorus01.logmap(
-                zeolite_initial_coords, zeolite_target_coords
-            )
-            zeolite_gt_geodesic_cart = torch.matmul(zeolite_gt_geodesic_frac, lattice)
-            zeolite_gt_distance_cart = (zeolite_gt_geodesic_cart**2).sum(-1).sqrt()
+                # Next, we calculate the ground truth rmsd for the zeolite, i.e. how much the atoms have moved during optimization
+                zeolite_gt_geodesic_frac = FlatTorus01.logmap(
+                    zeolite_initial_coords, zeolite_target_coords
+                )
+                zeolite_gt_geodesic_cart = torch.matmul(zeolite_gt_geodesic_frac, lattice)
+                zeolite_gt_distance_cart = (zeolite_gt_geodesic_cart**2).sum(-1).sqrt()
 
-            zeolite_gt_rmsd = (zeolite_gt_distance_cart**2).mean().sqrt()
+                zeolite_gt_rmsd = (zeolite_gt_distance_cart**2).mean().sqrt()
+                zeolite_gt_rmsds.append(zeolite_gt_rmsd)
+            else:
+                zeolite_rmsds.append(torch.tensor(0.0))
+                zeolite_gt_rmsds.append(torch.tensor(0.0))
 
             osda["rmsd"] = osda_rmsd
             zeolite["rmsd"] = zeolite_rmsd
@@ -965,6 +973,7 @@ class DockingRFMLitModule(ManifoldFMLitModule):
                 val_metric_best.compute(),
                 on_epoch=True,
                 prog_bar=True,
+                batch_size=self.cfg.data.datamodule.batch_size.val,
             )
             val_metric.reset()
             out[key] = val_metric_value

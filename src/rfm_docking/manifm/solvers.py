@@ -5,15 +5,26 @@ from tqdm import tqdm
 from manifm.manifolds import Euclidean
 from manifm.solvers import euler_step, midpoint_step, rk4_step
 
+def heun_step(odefunc, xt, vt, t, dt, manifold=None):
+    """Heun's method.""" # TODO copilot generated, get actual code from Malte
+    k1 = vt
+    k2 = odefunc(t + dt, xt + dt * k1)[0]
+    return xt + 0.5 * dt * (k1 + k2)
+
+@torch.no_grad()
+def get_step_fn(method):
+    return {
+        "euler": euler_step,
+        "midpoint": midpoint_step,
+        "rk4": rk4_step,
+        "heun": heun_step,
+    }[method]
+
 @torch.no_grad()
 def projx_integrator(
     manifold, odefunc, x0, t, method="euler", projx=True, local_coords=False, pbar=False
 ):
-    step_fn = {
-        "euler": euler_step,
-        "midpoint": midpoint_step,
-        "rk4": rk4_step,
-    }[method]
+    step_fn = get_step_fn(method)
 
     xts = [x0]
     vts = []
@@ -44,11 +55,7 @@ def projx_integrator_return_last(
 ):
     """Has a lower memory cost since this doesn't store intermediate values."""
 
-    step_fn = {
-        "euler": euler_step,
-        "midpoint": midpoint_step,
-        "rk4": rk4_step,
-    }[method]
+    step_fn = get_step_fn(method)
 
     xt = x0
 

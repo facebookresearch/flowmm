@@ -14,6 +14,7 @@ vectorfield:
   # dim_atomic_rep: ${get_dim_atomic_rep:${model.manifold_getter.atom_type_manifold}}
   self_edges: false
   self_cond: ${model.self_cond}
+  drop_be_prob: 1.0
 
 conjugate_model:
   _target_: rfm_docking.dock_and_optimize.arch.ProjectedConjugatedCSPNet
