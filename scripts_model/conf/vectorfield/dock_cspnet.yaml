@@ -1,13 +1,13 @@
 vectorfield:
-  _target_: rfm_docking.dock.arch.DockingCSPNet
-  hidden_dim: 256
-  time_dim: 128
+  _target_: rfm_docking.architectures.DockCSPNet
+  hidden_dim: 128
+  time_dim: 64
   num_layers: 3
   act_fn: silu
   dis_emb: sin
   num_freqs: 32
   edge_style: knn
-  max_neighbors: 5
+  max_neighbors: 20
   cutoff: 15.
   ln: true
   use_log_map: true  # false would put it in line with DiffCSP (euclidean distance function)
@@ -16,4 +16,4 @@ vectorfield:
   self_cond: ${model.self_cond}
 
 conjugate_model:
-  _target_: rfm_docking.dock.arch.ProjectedConjugatedCSPNet
+  _target_: rfm_docking.architectures.DockProjectedConjugatedCSPNet

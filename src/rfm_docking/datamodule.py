@@ -8,6 +8,7 @@ from hydra.utils import get_class
 import numpy as np
 import omegaconf
 import pytorch_lightning as pl
+
 import torch
 from omegaconf import DictConfig
 from torch.utils.data import Dataset, DataLoader
@@ -133,6 +134,7 @@ class CrystDataModule(pl.LightningDataModule):
             num_workers=self.num_workers.train,
             worker_init_fn=worker_init_fn,
             collate_fn=self.collate_fn,
+            pin_memory=True,
         )
 
     def val_dataloader(self) -> Sequence[DataLoader]:
@@ -144,6 +146,7 @@ class CrystDataModule(pl.LightningDataModule):
                 num_workers=self.num_workers.val,
                 worker_init_fn=worker_init_fn,
                 collate_fn=self.collate_fn,
+                pin_memory=True,
             )
             for dataset in self.val_datasets
         ]
@@ -157,6 +160,7 @@ class CrystDataModule(pl.LightningDataModule):
                 num_workers=self.num_workers.test,
                 worker_init_fn=worker_init_fn,
                 collate_fn=self.collate_fn,
+                pin_memory=True,
             )
             for dataset in self.test_datasets
         ]
@@ -170,6 +174,7 @@ class CrystDataModule(pl.LightningDataModule):
                 num_workers=self.num_workers.test,
                 worker_init_fn=worker_init_fn,
                 collate_fn=self.collate_fn,
+                pin_memory=True,
             )
             for dataset in self.test_datasets
         ]

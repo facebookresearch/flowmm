@@ -18,7 +18,7 @@ tolerance: 0.1
 
 use_space_group: false
 use_pos_index: false
-train_max_epochs: 1
+train_max_epochs: 10
 early_stopping_patience: 100000
 teacher_forcing_max_epoch: 1000
 
@@ -29,8 +29,8 @@ datamodule:
     train:
       _target_: src.rfm_docking.dataset.CustomCrystDataset
       name: Formation energy train
-      path: ${data.root_path}/5examples.csv
-      save_path: ${data.root_path}/train.pt
+      path: ${data.root_path}/below_500.csv
+      save_path: ${data.root_path}/train_overfit.pt
       prop: ${data.prop}
       niggli: ${data.niggli}
       primitive: ${data.primitive}
@@ -44,8 +44,8 @@ datamodule:
     val:
       - _target_: src.rfm_docking.dataset.CustomCrystDataset
         name: Formation energy val
-        path: ${data.root_path}/5examples.csv
-        save_path: ${data.root_path}/val.pt
+        path: ${data.root_path}/below_500.csv
+        save_path: ${data.root_path}/val_overfit.pt
         prop: ${data.prop}
         niggli: ${data.niggli}
         primitive: ${data.primitive}
@@ -59,8 +59,8 @@ datamodule:
     test:
       - _target_: src.rfm_docking.dataset.CustomCrystDataset
         name: Formation energy test
-        path: ${data.root_path}/5examples.csv
-        save_path: ${data.root_path}/test.pt
+        path: ${data.root_path}/below_500_test.csv
+        save_path: ${data.root_path}/test_overfit.pt
         prop: ${data.prop}
         niggli: ${data.niggli}
         primitive: ${data.primitive}
@@ -73,16 +73,18 @@ datamodule:
 
   num_workers:
     train: 8
-    val: 4
-    test: 4
-
-  batch_size:
-    train: 8
     val: 8
     test: 8
+
+  batch_size:
+    train: 24
+    val: 24
+    test: 24
 
   coord_manifold: ${model.manifold_getter.coord_manifold}
   dataset_name: ${data.dataset_name}
 
   collate:
     _target_: src.rfm_docking.dock.collate.DockCollater
+
+  do_ot: false

@@ -1,0 +1,40 @@
+dock_vectorfield:
+  _target_: rfm_docking.architectures.DockCSPNet
+  hidden_dim: 256
+  time_dim: 128
+  num_layers: 3
+  act_fn: silu
+  dis_emb: sin
+  num_freqs: 32
+  edge_style: knn
+  max_neighbors: 5
+  cutoff: 15.
+  ln: true
+  use_log_map: true  # false would put it in line with DiffCSP (euclidean distance function)
+  # dim_atomic_rep: ${get_dim_atomic_rep:${model.manifold_getter.atom_type_manifold}}
+  self_edges: false
+  self_cond: ${model.self_cond}
+
+dock_conjugate_model:
+  _target_: rfm_docking.architectures.DockProjectedConjugatedCSPNet
+
+
+optimize_vectorfield:
+  _target_: rfm_docking.architectures.OptimizeCSPNet
+  hidden_dim: 256
+  time_dim: 128
+  num_layers: 3
+  act_fn: silu
+  dis_emb: sin
+  num_freqs: 32
+  edge_style: knn
+  max_neighbors: 5
+  cutoff: 15.
+  ln: true
+  use_log_map: true  # false would put it in line with DiffCSP (euclidean distance function)
+  # dim_atomic_rep: ${get_dim_atomic_rep:${model.manifold_getter.atom_type_manifold}}
+  self_edges: false
+  self_cond: ${model.self_cond}
+
+optimize_conjugate_model:
+  _target_: rfm_docking.architectures.OptimizeProjectedConjugatedCSPNet

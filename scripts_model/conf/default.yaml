@@ -6,7 +6,7 @@ core:
 
 logging:
   # log frequency
-  val_check_interval: 2
+  val_check_interval: 5
   wandb:
     project: rfmcsp-${model.target_distribution}-${hydra:runtime.choices.data}
     entity: null
@@ -26,7 +26,7 @@ optim:
   # RFM
   optimizer:
     _target_: torch.optim.AdamW
-    lr: 5e-4
+    lr: 1e-3
     weight_decay: 0.0
   lr_scheduler:
     _target_: torch.optim.lr_scheduler.CosineAnnealingLR
@@ -50,9 +50,9 @@ train:
     precision: 32
     # max_steps: 10000
     max_epochs: ${data.train_max_epochs}
-    accumulate_grad_batches: 1
-    num_sanity_val_steps: 1
-    gradient_clip_val: 10
+    accumulate_grad_batches: 1 # Makes effective batch size = N * batch_size
+    num_sanity_val_steps: 1 
+    gradient_clip_val: 100
     gradient_clip_algorithm: value
     profiler: simple
 
@@ -83,8 +83,8 @@ test:
 
 integrate:
   div_mode: rademacher  # "exact" is an alternative
-  method: heun # euler
-  num_steps: 500 # 0_100 
+  method: euler
+  num_steps: 50 # 0_100 
   normalize_loglik: True  # this is normalized by dimension
   inference_anneal_slope: 0.0
   inference_anneal_offset: 0.0
@@ -92,7 +92,7 @@ integrate:
 
 defaults:
   - _self_
-  - data: dock_and_optimize
+  - data: docking # dock_then_optimize # docking 
   - model: docking_only_coords # null_params_for_testing # docking_only_coords
-  - vectorfield: dock_and_optimize_cspnet # cspnet # rfm_cspnet 
+  - vectorfield: dock_cspnet # dock_then_optimize_cspnet # dock_cspnet # cspnet # rfm_cspnet 
   - hydra: trash

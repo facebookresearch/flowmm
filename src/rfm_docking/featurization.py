@@ -22,13 +22,13 @@ atom_features_list = {
     # 'numH': [0, 1, 2, 3, 4, 'misc'],
     "number_radical_e": [0, 1, 2, 3, 4, "misc"],
     "hybridization": ["SP", "SP2", "SP3", "SP3D", "SP3D2", "misc"],
-    "is_aromatic": [False, True],
-    "is_in_ring3": [False, True],
-    "is_in_ring4": [False, True],
-    "is_in_ring5": [False, True],
-    "is_in_ring6": [False, True],
-    "is_in_ring7": [False, True],
-    "is_in_ring8": [False, True],
+    "is_aromatic": [False, True, "misc"],
+    "is_in_ring3": [False, True, "misc"],
+    "is_in_ring4": [False, True, "misc"],
+    "is_in_ring5": [False, True, "misc"],
+    "is_in_ring6": [False, True, "misc"],
+    "is_in_ring7": [False, True, "misc"],
+    "is_in_ring8": [False, True, "misc"],
 }
 
 bond_features_list = {
@@ -41,7 +41,7 @@ bond_features_list = {
         "STEREOTRANS",
         "STEREOANY",
     ],
-    "is_conjugated": [False, True],
+    "is_conjugated": [False, True, "misc"],
 }
 
 

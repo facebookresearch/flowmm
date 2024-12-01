@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from scipy.optimize import LinearConstraint, Bounds, milp
+from scipy.optimize import LinearConstraint, Bounds, milp, linear_sum_assignment
 
 from flowmm.rfm.manifolds.flat_torus import FlatTorus01
 
@@ -27,8 +27,8 @@ def ot_reassignment(x0, x1, classes, cost="geodesic"):
         cost_matrix = cost_matrix.numpy()
 
     elif cost == "euclidean":
-        x0 = x0.cpu().numpy()
-        x1 = x1.cpu().numpy()
+        x0 = x0.numpy()
+        x1 = x1.numpy()
         cost_matrix = np.linalg.norm(x0[:, None, :] - x1[None, :, :], axis=-1)
     else:
         raise ValueError(f"Unknown cost function {cost}")
@@ -130,6 +130,42 @@ def ot_reassignment(x0, x1, classes, cost="geodesic"):
 
     cost = res.fun
     return cost, torch.tensor(col_indices, dtype=torch.long)
+
+
+def reassign_molecule(x0, x1):
+    """
+    Finds the optimal permutation matrix P that minimizes the distance
+    between x0 and the permuted x1.
+
+    N is number of mols, M is number of atoms per molecule
+
+    Args:
+        x0: numpy array of shape (N, M, 3), reference set of points.
+        x1: numpy array of shape (N, M, 3), points to permute.
+
+    Returns:
+        permuted_x1: numpy array of shape (N, M, 3), x1 after applying optimal permutation.
+        row_ind: row indices corresponding to the optimal permutation.
+        col_ind: column indices corresponding to the optimal permutation.
+    """
+    # N, M, 3 = x0.shape
+
+    # Compute cost matrix efficiently using broadcasting
+    # Expand dimensions to compute pairwise distances for all (N, N) combinations
+    # Shape: (N, N, M, 3)
+    cost_vectors = FlatTorus01.logmap(x0[:, None, :], x1[None, :, :])
+
+    # Shape: (N, N), sum over M and 3 dimensions
+    cost_matrix = (cost_vectors**2).sum((-1, -2))
+    cost_matrix = cost_matrix.numpy()
+
+    # Solve the assignment problem
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+
+    # Permute x1 based on the optimal assignment
+    permuted_x1 = x1[col_ind]
+
+    return permuted_x1, row_ind, col_ind
 
 
 if __name__ == "__main__":

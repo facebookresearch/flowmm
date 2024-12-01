@@ -6,8 +6,8 @@ import torch
 from geoopt import Manifold
 from torch import nn
 from torch_geometric.utils import dense_to_sparse
-from torch_geometric.data import HeteroData
-
+from torch_geometric.data import Batch
+from pymatgen.core import Structure, Lattice
 from torch_scatter import scatter
 
 from diffcsp.common.data_utils import radius_graph_pbc
@@ -141,7 +141,7 @@ class CSPLayer(DiffCSPLayer):
         return node_input + node_output
 
 
-class DockingCSPNet(DiffCSPNet):
+class CSPNet(DiffCSPNet):
     def __init__(
         self,
         hidden_dim: int = 512,
@@ -275,9 +275,71 @@ class DockingCSPNet(DiffCSPNet):
 
             return edge_index_new, -edge_vector_new
 
+    def gen_edges_new(self, num_atoms, frac_coords, lattices, batch, radius=7.0):
+        all_edges = []
+        counter = 0
+        for i, lattice in enumerate(lattices):
+            frac_coords_i = frac_coords[batch == i].cpu()
+
+            # Number of atoms
+            num_atoms_i = num_atoms[i]
+
+            # Create a pymatgen Lattice object from the given lattice matrix
+            lattice_pmg = Lattice.from_parameters(*lattice.cpu().tolist())
+
+            # Create a pymatgen Structure object
+            structure = Structure(
+                lattice=lattice_pmg,
+                species=["H"] * num_atoms_i,  # set dummy species, not needed
+                coords=frac_coords_i,
+                coords_are_cartesian=False,
+            )
+
+            # Initialize lists for edges and distances
+            edges = []
+
+            # Loop over each site in the structure to find neighbors within the cutoff radius
+            for i in range(num_atoms_i):
+                # Get neighbors within the cutoff radius using get_neighbors method
+                neighbors = structure.get_neighbors(structure[i], radius)
+
+                # Sort neighbors by distance to ensure we respect the max_neighbors constraint
+                neighbors = sorted(neighbors, key=lambda x: x.nn_distance)[
+                    : self.max_neighbors
+                ]
+
+                # Collect valid edges and distances
+                for neighbor in neighbors:
+                    j = neighbor.index  # Index of the neighboring atom
+                    edges.append((i, j))
+
+            # Convert lists to numpy arrays
+            edges = torch.tensor(edges, dtype=torch.long, device=frac_coords.device).t()
+            edges += counter
+
+            # Append the edges to the list of all edges
+            all_edges.append(edges)
+
+            # Update the counter
+            counter += num_atoms_i
+
+        # Concatenate all edges
+        edges = torch.cat(all_edges, dim=1)
+
+        if self.use_log_map:
+            # this is the shortest torus distance, but DiffCSP didn't use it
+            # not sure it makes sense for the cartesian space version
+            frac_diff = FlatTorus01.logmap(frac_coords[edges[0]], frac_coords[edges[1]])
+        else:
+            frac_diff = frac_coords[edges[1]] - frac_coords[edges[0]]
+
+        return edges, -frac_diff
+
+
+class DockCSPNet(CSPNet):
     def forward(
         self,
-        batch: HeteroData,
+        batch: Batch,
         t,
     ):
         t_emb = self.time_emb(t)
@@ -356,6 +418,7 @@ class DockingCSPNet(DiffCSPNet):
             edge_style=self.edge_style,
             radius=self.cutoff,
         )
+
         # remove edges that are zeolite-zeolite or osda-osda
         is_cross_edge = osda_nodes_mask[cross_edges[0]] & torch.logical_not(
             osda_nodes_mask[cross_edges[1]]
@@ -448,10 +511,68 @@ class DockingCSPNet(DiffCSPNet):
         return coord_out
 
 
+class OptimizeCSPNet(CSPNet):
+    def forward(
+        self,
+        batch: Batch,
+        t,
+    ):
+        t_emb = self.time_emb(t)
+        t_emb = t_emb.expand(
+            batch.num_atoms.shape[0], -1
+        )  # if there is a single t, repeat for the batch
+
+        # create graph
+        edges, frac_diff = self.gen_edges(
+            batch.num_atoms,
+            batch.frac_coords,
+            batch.lattices,
+            batch.batch,
+            edge_style="knn",  # NOTE fc = fully connected
+            radius=self.cutoff,
+        )
+        edge2graph = batch.batch[edges[0]]
+
+        # neural network
+        # embed atom features
+        node_features = self.node_embedding(batch.atom_types)
+        t_per_atom = t_emb.repeat_interleave(batch.num_atoms.to(t_emb.device), dim=0)
+
+        node_features = torch.cat(
+            [
+                node_features,
+                t_per_atom,
+            ],
+            dim=1,
+        )
+        node_features = self.atom_latent_emb(node_features)
+        node_features = self.act_fn(node_features)
+
+        # do docking first
+        for i in range(0, self.num_layers):
+            # update osda node feats
+            node_features = self._modules["csp_layer_%d" % i](
+                node_features,
+                batch.lattices,
+                edges,
+                edge2graph,
+                frac_diff,
+                batch.num_atoms,
+            )
+
+        if self.ln:
+            node_features = self.final_layer_norm(node_features)
+
+        # predict coords
+        coord_out = self.coord_out(node_features)
+
+        return coord_out
+
+
 class ProjectedConjugatedCSPNet(nn.Module):
     def __init__(
         self,
-        cspnet: DockingCSPNet,
+        cspnet: CSPNet,
         manifold_getter: ManifoldGetter,
         coord_affine_stats: dict[str, torch.Tensor] | None = None,
     ):
@@ -471,7 +592,47 @@ class ProjectedConjugatedCSPNet(nn.Module):
 
     def _conjugated_forward(
         self,
-        batch: HeteroData,
+        batch: Batch,
+        t: torch.Tensor,
+        x: torch.Tensor,
+        cond: torch.Tensor | None,
+    ) -> ManifoldGetterOut:
+        raise NotImplementedError
+
+    def forward(
+        self,
+        batch: Batch,
+        t: torch.Tensor,
+        x: torch.Tensor,
+        manifold: Manifold,
+        cond: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """u_t: [0, 1] x M -> T M
+
+        representations are mapped as follows:
+        `flat -> flat_manifold -> pytorch_geom -(nn)-> pytorch_geom -> flat_tangent_estimate -> flat_tangent`
+        """
+        x = manifold.projx(x)
+        if cond is not None:
+            cond = manifold.projx(cond)
+        v, *_ = self._conjugated_forward(
+            batch,
+            t,
+            x,
+            cond,
+        )
+        # NOTE comment out to predict position directly
+        v = manifold.proju(x, v)
+
+        if self.metric_normalized and hasattr(manifold, "metric_normalized"):
+            v = manifold.metric_normalized(x, v)
+        return v
+
+
+class DockProjectedConjugatedCSPNet(ProjectedConjugatedCSPNet):
+    def _conjugated_forward(
+        self,
+        batch: Batch,
         t: torch.Tensor,
         x: torch.Tensor,
         cond: torch.Tensor | None,
@@ -511,31 +672,43 @@ class ProjectedConjugatedCSPNet(nn.Module):
             split_manifold=False,
         )
 
-    def forward(
+
+class OptimizeProjectedConjugatedCSPNet(ProjectedConjugatedCSPNet):
+    def _conjugated_forward(
         self,
-        batch: HeteroData,
+        batch: Batch,
         t: torch.Tensor,
         x: torch.Tensor,
-        manifold: Manifold,
-        cond: torch.Tensor | None = None,
-    ) -> torch.Tensor:
-        """u_t: [0, 1] x M -> T M
+        cond: torch.Tensor | None,
+    ) -> ManifoldGetterOut:
+        frac_coords = self.manifold_getter.flatrep_to_georep(
+            x,
+            dims=batch.dims,
+            mask_f=batch.mask_f,
+        )
+        batch.frac_coords = frac_coords.f
 
-        representations are mapped as follows:
-        `flat -> flat_manifold -> pytorch_geom -(nn)-> pytorch_geom -> flat_tangent_estimate -> flat_tangent`
-        """
-        x = manifold.projx(x)
-        if cond is not None:
-            cond = manifold.projx(cond)
-        v, *_ = self._conjugated_forward(
+        if self.self_cond:
+            if cond is not None:
+                fc_cond = self.manifold_getter.flatrep_to_georep(
+                    cond,
+                    dims=batch.dims,
+                    mask_f=batch.mask_f,
+                )
+                fc_cond = fc_cond.f
+
+            else:
+                fc_cond = torch.zeros_like(frac_coords)
+
+            batch.frac_coords = torch.cat([batch.frac_coords, fc_cond], dim=-1)
+
+        coord_out = self.cspnet(
             batch,
             t,
-            x,
-            cond,
         )
-        # NOTE comment out to predict position directly
-        v = manifold.proju(x, v)
 
-        if self.metric_normalized and hasattr(manifold, "metric_normalized"):
-            v = manifold.metric_normalized(x, v)
-        return v
+        return self.manifold_getter.georep_to_flatrep(
+            batch=batch.batch,
+            frac_coords=coord_out,
+            split_manifold=False,
+        )

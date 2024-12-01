@@ -13,7 +13,6 @@ from omegaconf import ValueNode
 from p_tqdm import p_umap
 
 from diffcsp.common.utils import PROJECT_ROOT
-from rfm_docking.utils import sample_mol_in_frac
 from tqdm import tqdm
 from multiprocessing import Pool
 from diffcsp.common.data_utils import (
@@ -26,6 +25,7 @@ from rfm_docking.featurization import (
     get_atoms_and_pos,
     split_zeolite_and_osda_pos,
     featurize_osda,
+    get_feature_dims,
 )
 
 
@@ -56,6 +56,23 @@ def process_one(args):
     smiles = row.smiles
     loading = int(row.loading)
     node_feats, edge_feats, edge_index = featurize_osda(smiles)
+
+    osda_node_feats = node_feats.repeat(loading, 1)
+
+    _, N = edge_index.shape
+
+    # Create offsets using torch.arange
+    offsets = torch.arange(loading, device=edge_index.device) * (
+        osda_node_feats.shape[0] // loading
+    )
+    # Repeat the offsets for each edge entry
+    offsets = offsets.view(-1, 1).repeat(1, N).view(1, -1)  # Shape: (1, N * loading)
+
+    # increment edge indices for each loaded osda
+    osda_edge_indices = edge_index.repeat(1, loading)
+    osda_edge_indices += offsets
+
+    osda_edge_feats = edge_feats.repeat(loading, 1)
 
     ### process the docked structures
     dock_axyz = eval(row.dock_xyz)
@@ -128,7 +145,7 @@ def process_one(args):
         "crystal_id": crystal_id,
         "smiles": smiles,
         "loading": loading,
-        "osda_feats": (node_feats, edge_feats, edge_index),
+        "osda_feats": (osda_node_feats, osda_edge_feats, osda_edge_indices),
         "dock_zeolite_graph_arrays": dock_zeolite_graph_arrays,
         "dock_osda_graph_arrays": dock_osda_graph_arrays,
         "opt_zeolite_graph_arrays": opt_zeolite_graph_arrays,
@@ -228,6 +245,10 @@ class CustomCrystDataset(Dataset):
         self.use_pos_index = use_pos_index
         self.tolerance = tolerance
 
+        node_feat_dims, edge_feat_dims = get_feature_dims()
+        self.node_feat_dims = node_feat_dims
+        self.edge_feat_dims = edge_feat_dims
+
         self.preprocess(save_path, preprocess_workers, prop)
 
         # add_scaled_lattice_prop(self.cached_data, lattice_scale_method)
@@ -280,14 +301,15 @@ class CustomCrystDataset(Dataset):
             atom_types,
             lengths,
             angles,
-            edge_indices,  # NOTE edge indices will be overwritten with rdkit featurization
+            _,  # NOTE edge indices will be overwritten with rdkit featurization
             to_jimages,
             num_atoms,
         ) = data_dict["dock_osda_graph_arrays"]
 
         smiles = data_dict["smiles"]
+        loading = data_dict["loading"]
 
-        # node_feats, edge_feats, edge_indices = data_dict["osda_feats"]
+        osda_node_feats, osda_edge_feats, osda_edge_indices = data_dict["osda_feats"]
 
         # atom_coords are fractional coordinates
         # edge_index is incremented during batching
@@ -298,14 +320,15 @@ class CustomCrystDataset(Dataset):
             lengths=torch.Tensor(lengths).view(1, -1),
             angles=torch.Tensor(angles).view(1, -1),
             edge_index=torch.LongTensor(
-                edge_indices.T
+                osda_edge_indices
             ).contiguous(),  # shape (2, num_edges)
+            edge_feats=osda_edge_feats,
+            node_feats=osda_node_feats,
             to_jimages=torch.LongTensor(to_jimages),
             num_atoms=num_atoms,
-            num_bonds=edge_indices.shape[0],
+            num_bonds=osda_edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
             y=prop.view(1, -1),
-            conformer=data_dict["conformer"] if "conformer" in data_dict else None,
         )
 
         (
@@ -314,9 +337,14 @@ class CustomCrystDataset(Dataset):
             lengths,
             angles,
             edge_indices,
-            to_jimages,
+            _,  # to_jimages,
             num_atoms,
         ) = data_dict["dock_zeolite_graph_arrays"]
+
+        # assign the misc class to the zeolite node feats, except for atom types
+        zeolite_node_feats = torch.tensor(self.node_feat_dims) - 1
+        zeolite_node_feats = zeolite_node_feats.repeat(num_atoms, 1)
+        zeolite_node_feats[:, 0] = torch.tensor(atom_types)
 
         zeolite_data = Data(
             frac_coords=torch.Tensor(frac_coords),
@@ -326,7 +354,8 @@ class CustomCrystDataset(Dataset):
             edge_index=torch.LongTensor(
                 edge_indices.T
             ).contiguous(),  # shape (2, num_edges)
-            to_jimages=torch.LongTensor(to_jimages),
+            node_feats=zeolite_node_feats,
+            # to_jimages=torch.LongTensor(to_jimages),
             num_atoms=num_atoms,
             num_bonds=edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
@@ -339,7 +368,7 @@ class CustomCrystDataset(Dataset):
             lengths,
             angles,
             edge_indices,  # NOTE edge indices will be overwritten with rdkit featurization
-            to_jimages,
+            _,  # to_jimages,
             num_atoms,
         ) = data_dict["opt_osda_graph_arrays"]
 
@@ -349,14 +378,15 @@ class CustomCrystDataset(Dataset):
             lengths=torch.Tensor(lengths).view(1, -1),
             angles=torch.Tensor(angles).view(1, -1),
             edge_index=torch.LongTensor(
-                edge_indices.T
+                osda_edge_indices
             ).contiguous(),  # shape (2, num_edges)
-            to_jimages=torch.LongTensor(to_jimages),
+            edge_feats=osda_edge_feats,
+            node_feats=osda_node_feats,
+            # to_jimages=torch.LongTensor(to_jimages),
             num_atoms=num_atoms,
-            num_bonds=edge_indices.shape[0],
+            num_bonds=osda_edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
             y=prop.view(1, -1),
-            conformer=data_dict["conformer"] if "conformer" in data_dict else None,
         )
 
         (
@@ -365,7 +395,7 @@ class CustomCrystDataset(Dataset):
             lengths,
             angles,
             edge_indices,
-            to_jimages,
+            _,  # to_jimages,
             num_atoms,
         ) = data_dict["opt_zeolite_graph_arrays"]
 
@@ -377,7 +407,8 @@ class CustomCrystDataset(Dataset):
             edge_index=torch.LongTensor(
                 edge_indices.T
             ).contiguous(),  # shape (2, num_edges)
-            to_jimages=torch.LongTensor(to_jimages),
+            node_feats=zeolite_node_feats,
+            # to_jimages=torch.LongTensor(to_jimages),
             num_atoms=num_atoms,
             num_bonds=edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
@@ -387,6 +418,7 @@ class CustomCrystDataset(Dataset):
         data = HeteroData()
         data.crystal_id = data_dict["crystal_id"]
         data.smiles = smiles
+        data.loading = loading
         data.osda = osda_data
         data.osda_opt = osda_data_opt
         data.zeolite = zeolite_data

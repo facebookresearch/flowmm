@@ -10,6 +10,7 @@ import numpy as np
 import omegaconf
 import torch
 import pytorch_lightning as pl
+from pytorch_lightning.strategies import DDPStrategy
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback, seed_everything
 from pytorch_lightning.callbacks import (
@@ -23,6 +24,7 @@ import wandb
 from diffcsp.common.utils import log_hyperparameters
 from flowmm.model.eval_utils import register_omega_conf_resolvers
 from rfm_docking.model_pl import DockingRFMLitModule
+from rfm_docking.dock_then_optimize.model_pl import DockThenOptimizeRFMLitModule
 
 # https://github.com/Project-MONAI/MONAI/issues/701#issuecomment-767330310
 rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
@@ -127,7 +129,7 @@ def run(cfg: DictConfig) -> None:
     )
 
     # Instantiate model
-    get_model = DockingRFMLitModule
+    get_model = DockingRFMLitModule  # DockThenOptimizeRFMLitModule
     hydra.utils.log.info(f"Instantiating <{get_model}>")
     model = get_model(cfg)
 
@@ -176,6 +178,7 @@ def run(cfg: DictConfig) -> None:
         check_val_every_n_epoch=cfg.logging.val_check_interval,
         # progress_bar_refresh_rate=cfg.logging.progress_bar_refresh_rate,
         resume_from_checkpoint=ckpt,
+        strategy=DDPStrategy(find_unused_parameters=False),
         **cfg.train.pl_trainer,
     )
 
@@ -193,11 +196,7 @@ def run(cfg: DictConfig) -> None:
     hydra.utils.log.info("Starting testing!")
     ckpt_path = "last" if cfg.train.pl_trainer.fast_dev_run else "best"
     # trainer.test(datamodule=datamodule, ckpt_path=ckpt_path)
-    traj = trainer.predict(
-        dataloaders=datamodule.test_dataloader(), ckpt_path=ckpt_path
-    )
-
-    torch.save(traj, "traj.pt")
+    _ = trainer.predict(dataloaders=datamodule.test_dataloader(), ckpt_path=ckpt_path)
 
     # Logger closing to release resources/avoid multi-run conflicts
     if wandb_logger is not None:

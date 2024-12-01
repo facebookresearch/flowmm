@@ -18,7 +18,7 @@ tolerance: 0.1
 
 use_space_group: false
 use_pos_index: false
-train_max_epochs: 1
+train_max_epochs: 2
 early_stopping_patience: 100000
 teacher_forcing_max_epoch: 1000
 
@@ -77,14 +77,14 @@ datamodule:
     test: 4
 
   batch_size:
-    train: 6
-    val: 6
-    test: 6
+    train: 4
+    val: 4
+    test: 4
 
   coord_manifold: ${model.manifold_getter.coord_manifold}
   dataset_name: ${data.dataset_name}
 
   collate:
-    _target_: src.rfm_docking.dock_and_optimize.collate.DockAndOptimizeCollater
+    _target_: src.rfm_docking.dock_then_optimize.collate.DockThenOptimizeCollater
 
-  do_ot: True
+  do_ot: False

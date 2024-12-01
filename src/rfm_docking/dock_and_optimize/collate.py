@@ -2,7 +2,7 @@ import torch
 from torch_geometric.data import Batch, HeteroData, Data
 
 from src.flowmm.rfm.manifolds.flat_torus import FlatTorus01
-from rfm_docking.reassignment import ot_reassignment
+from rfm_docking.reassignment import reassign_molecule
 from rfm_docking.manifold_getter import DockingManifoldGetter
 
 
@@ -16,7 +16,7 @@ def dock_and_optimize_collate_fn(
     smiles = batch.smiles
     crystal_id = batch.crystal_id
 
-    osda = Batch.from_data_list(batch.osda)
+    osda = Batch.from_data_list(batch.osda_opt)
     zeolite_dock = Batch.from_data_list(batch.zeolite)
     zeolite_opt = Batch.from_data_list(batch.zeolite_opt)
 
@@ -88,9 +88,7 @@ def dock_and_optimize_collate_fn(
             osda_atom_types = batch.atom_types[batch.batch == i][:num_atoms_osda]
 
             # reassign x0 to x1
-            _, reassigned_idx = ot_reassignment(
-                x0_osda_geo, x1_osda_geo, osda_atom_types, cost="geodesic"
-            )
+            _, reassigned_idx = reassign_molecule(x0_osda_geo, x1_osda_geo)
             x1_osda_geo = x1_osda_geo[reassigned_idx]
 
             # reassigned x1 back to flatrep
