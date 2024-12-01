@@ -372,7 +372,7 @@ class CustomCrystDataset(Dataset):
             num_atoms=num_atoms,
             num_bonds=edge_indices.shape[0],
             num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-            y=prop.view(1, -1),
+            # y=prop.view(1, -1), # TODO mrx prop is now a dict so this will fail
         )
 
         if "optimize" in self.task:
@@ -400,7 +400,7 @@ class CustomCrystDataset(Dataset):
                 num_atoms=num_atoms,
                 num_bonds=osda_edge_indices.shape[0],
                 num_nodes=num_atoms,  # special attribute used for batching in pytorch geometric
-                y=prop.view(1, -1),
+                # y=prop.view(1, -1), # TODO mrx prop is now a dict so this will fail
             )
 
             (
