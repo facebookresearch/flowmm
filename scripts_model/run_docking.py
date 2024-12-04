@@ -19,6 +19,7 @@ from pytorch_lightning.callbacks import (
     ModelCheckpoint,
 )
 from pytorch_lightning.loggers import WandbLogger
+from hydra.utils import get_class
 
 import wandb
 from diffcsp.common.utils import log_hyperparameters
@@ -129,7 +130,7 @@ def run(cfg: DictConfig) -> None:
     )
 
     # Instantiate model
-    get_model = DockingRFMLitModule  # DockThenOptimizeRFMLitModule
+    get_model = get_class(cfg.vectorfield.module._target_)
     hydra.utils.log.info(f"Instantiating <{get_model}>")
     model = get_model(cfg)
 
