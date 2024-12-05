@@ -1,3 +1,4 @@
+import os
 from ase.io import read, write
 from ase import Atoms, Atom
 from ase.visualize import view
@@ -5,6 +6,7 @@ from pymatgen.core.lattice import Lattice
 import torch
 import pandas as pd
 import numpy as np
+import argparse
 
 from diffcsp.common.data_utils import lattice_params_to_matrix_torch
 from flowmm.rfm.manifolds.flat_torus import FlatTorus01
@@ -32,14 +34,26 @@ class InMemoryTrajectory:
 def create_gif_from_traj(
     traj_file,
     output_gif,
+    structure_type="osda_pred_and_osda_target",
 ):
     data = torch.load(traj_file, map_location="cpu")
-
-    index = 0
-    data = data[0]
-    lattice = data["lattices"][index]
+    # index = 0
+    # data = data[0]
+    # try:
+    #     lattice = data["lattices"][index]
+    # except TypeError:
+    #     data = data[0]
+    #     lattice = data["lattices"][index]
+    # breakpoint()
+    try:
+        lattice = data["lattices"] # gen_trajectory 
+    except TypeError:
+        data = data[0][0]
+        lattice = data["lattices"] # recon_trajectory
 
     osda = data["osda"]
+    # osda = data["osda_traj"]
+
     osda_atoms = osda["atom_types"]
 
     zeolite = data["zeolite"]
@@ -51,7 +65,7 @@ def create_gif_from_traj(
         )
 
     structures = []
-    for osda_coords, zeolite_coords in zip(osda["frac_coords"], zeolite["frac_coords"]):
+    for frame_idx, (osda_coords, zeolite_coords) in enumerate(zip(osda["frac_coords"], zeolite["frac_coords"])):
         zeolite_atoms_i = zeolite_atoms
         zeolite_coords_i = zeolite_coords
 
@@ -63,17 +77,24 @@ def create_gif_from_traj(
         )"""
         osda_target_coords = osda["target_coords"] % 1.0
 
-        # atoms_i = torch.cat([osda_atoms_i, zeolite_atoms_i])
-        # coords_i = torch.cat([osda_coords_i, zeolite_coords_i])
-        atoms_i = torch.cat([osda_atoms_i, osda_atoms_i])
-        coords_i = torch.cat([osda_coords_i, osda_target_coords])
-
-        # atoms_i = osda_atoms_i
-        # coords_i = osda_coords_i
+        if structure_type == "osda_pred_and_none_target":
+            atoms_i = osda_atoms_i
+            coords_i = osda_coords_i    
+        elif structure_type == "none_pred_and_osda_target":
+            atoms_i = osda_atoms_i
+            coords_i = osda_target_coords
+        elif structure_type == "osda_pred_and_osda_target":
+            atoms_i = torch.cat([osda_atoms_i, osda_atoms_i])
+            coords_i = torch.cat([osda_coords_i, osda_target_coords])
+        elif structure_type == "all_pred_and_none_target":
+            atoms_i = torch.cat([osda_atoms_i, zeolite_atoms_i])
+            coords_i = torch.cat([osda_coords_i, zeolite_coords_i])
 
         predicted = Atoms(
             atoms_i, scaled_positions=coords_i, cell=tuple(lattice.squeeze().tolist())
         )
+        # save as CIF file 
+        write(output_gif.split(".")[0] + f"_{structure_type}_{frame_idx}.cif", predicted, format="cif")
 
         """# TODO add some distincting color for the target
         for i, target_atom in enumerate(osda_atoms):
@@ -86,7 +107,8 @@ def create_gif_from_traj(
     for atoms in structures:
         traj.write(atoms)
 
-    write(output_gif, traj, rotation="30x,30y,30z", interval=1)
+    write(output_gif.split(".")[0] + "_303030.gif", traj, rotation="30x,30y,30z", interval=1)
+    write(output_gif.split(".")[0] + "_606060.gif", traj, rotation="60x,60y,60z", interval=1)
     print(f"GIF saved as {output_gif}")
 
 
@@ -145,18 +167,25 @@ def vis_struc(atoms, frac_coords, lattice, name):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--traj_file", type=str, required=True)
+    parser.add_argument("--output_gif", type=str, required=True)
+    parser.add_argument("--structure_type", type=str, default="osda_pred_and_osda_target")
+    args = parser.parse_args()
+    os.makedirs(os.path.dirname(args.output_gif), exist_ok=True)
+    create_gif_from_traj(args.traj_file, args.output_gif, args.structure_type)
 
     # malte 
     
     # show_ground_truth(536467517)
-    traj_file = "/home/malte/flowmm/runs/trash/2024-12-01/11-34-47/docking_only_coords-dock_cspnet-te07cq7v/536399918_traj.pt"
-    crystal_id = traj_file.split("/")[-1].split("_")[0]
+    # traj_file = "/home/malte/flowmm/runs/trash/2024-12-01/11-34-47/docking_only_coords-dock_cspnet-te07cq7v/536399918_traj.pt"
+    # crystal_id = traj_file.split("/")[-1].split("_")[0]
 
-    create_gif_from_traj(
-        # traj_file="/home/malte/flowmm/runs/trash/2024-11-13/10-44-45/docking_only_coords-dock_and_optimize_cspnet-tsq861qh/traj.pt",
-        traj_file=traj_file,  # "/home/malte/flowmm/runs/trash/2024-11-26/14-30-27/docking_only_coords-dock_cspnet-iohsk2ru/traj.pt",
-        output_gif=f"{crystal_id}.gif",
-    )
+    # create_gif_from_traj(
+    #     # traj_file="/home/malte/flowmm/runs/trash/2024-11-13/10-44-45/docking_only_coords-dock_and_optimize_cspnet-tsq861qh/traj.pt",
+    #     traj_file=traj_file,  # "/home/malte/flowmm/runs/trash/2024-11-26/14-30-27/docking_only_coords-dock_cspnet-iohsk2ru/traj.pt",
+    #     output_gif=f"{crystal_id}.gif",
+    # )
 
     # mrx 
 
