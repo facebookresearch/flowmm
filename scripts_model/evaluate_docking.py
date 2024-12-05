@@ -8,7 +8,7 @@ from typing import Any, Literal, Sequence
 
 import click
 import pytorch_lightning as pl
-from src.rfm_docking.dock.dataset import CustomCrystDataset
+from src.rfm_docking.dataset import CustomCrystDataset
 import torch
 from pytorch_lightning.callbacks import BasePredictionWriter
 from pytorch_lightning.loggers.wandb import WandbLogger
@@ -187,10 +187,10 @@ def reconstruct(
 ) -> None:
     cfg, model = load_model(checkpoint)
 
-    if "null" not in cfg.model.manifold_getter.atom_type_manifold:
-        raise ValueError(
-            f"you cannot do reconstruction with an unconditional atom_type_manifold {cfg.model.manifold_getter.atom_type_manifold=}"
-        )
+    # if "null" not in cfg.model.manifold_getter.atom_type_manifold:
+    #     raise ValueError(
+    #         f"you cannot do reconstruction with an unconditional atom_type_manifold {cfg.model.manifold_getter.atom_type_manifold=}"
+    #     )
 
     stage = stage.lower()
     if batch_size is None:  # this must be explicitly set since the default is int
@@ -325,10 +325,10 @@ def recon_trajectory(
 ) -> None:
     cfg, model = load_model(checkpoint)
 
-    if "null" not in cfg.model.manifold_getter.atom_type_manifold:
-        raise ValueError(
-            f"you cannot do reconstruction with an unconditional atom_type_manifold {cfg.model.manifold_getter.atom_type_manifold=}"
-        )
+    # if "null" not in cfg.model.manifold_getter.atom_type_manifold:
+    #     raise ValueError(
+    #         f"you cannot do reconstruction with an unconditional atom_type_manifold {cfg.model.manifold_getter.atom_type_manifold=}"
+    #     )
 
     stage = stage.lower()
     if batch_size is None:  # this must be explicitly set since the default is int
@@ -464,10 +464,10 @@ def generate(
 ) -> None:
     cfg, model = load_model(checkpoint)
 
-    if "null" in cfg.model.manifold_getter.atom_type_manifold:
-        raise ValueError(
-            f"you cannot do generation with a conditional atom_type_manifold {cfg.model.manifold_getter.atom_type_manifold=}"
-        )
+    # if "null" in cfg.model.manifold_getter.atom_type_manifold:
+    #     raise ValueError(
+    #         f"you cannot do generation with a conditional atom_type_manifold {cfg.model.manifold_getter.atom_type_manifold=}"
+    #     )
 
     # update cfg
     if num_steps is not None:
@@ -621,6 +621,7 @@ def gen_trajectory(
     cfg.integrate.entire_traj = True
     # sample_set = GenDataset(dataset=cfg.data.dataset_name, total_num=num_samples)
     # loader = DataLoader(sample_set, batch_size=batch_size)
+    # TODO mrx please fix; setting this as the training config's test dataloader for now 
     datamodule: pl.LightningDataModule = hydra.utils.instantiate(
         cfg.data.datamodule, _recursive_=False
     )

@@ -872,33 +872,27 @@ class DockingRFMLitModule(ManifoldFMLitModule):
 
             osda_rmsd = (osda_distance_cart**2).mean().sqrt()
 
-            if not all(is_osda):
-                # calculate zeolite rmsd (per batch per atom) in cartesian space
-                zeolite_initial_coords = zeolite["frac_coords"][0]
-                zeolite_coords = zeolite["frac_coords"][-1]
-                zeolite_target_coords = zeolite["target_coords"]
+            # calculate zeolite rmsd (per batch per atom) in cartesian space
+            zeolite_initial_coords = zeolite["frac_coords"][0]
+            zeolite_coords = zeolite["frac_coords"][-1]
+            zeolite_target_coords = zeolite["target_coords"]
 
-                zeolite_geodesic_frac = FlatTorus01.logmap(
-                    zeolite_coords, zeolite_target_coords
-                )
-                zeolite_geodesic_cart = torch.matmul(zeolite_geodesic_frac, lattice)
-                zeolite_distance_cart = (zeolite_geodesic_cart**2).sum(-1).sqrt()
+            zeolite_geodesic_frac = FlatTorus01.logmap(
+                zeolite_coords, zeolite_target_coords
+            )
+            zeolite_geodesic_cart = torch.matmul(zeolite_geodesic_frac, lattice)
+            zeolite_distance_cart = (zeolite_geodesic_cart**2).sum(-1).sqrt()
 
-                zeolite_rmsd = (zeolite_distance_cart**2).mean().sqrt()
-                zeolite_rmsds.append(zeolite_rmsd)
+            zeolite_rmsd = (zeolite_distance_cart**2).mean().sqrt()
 
-                # Next, we calculate the ground truth rmsd for the zeolite, i.e. how much the atoms have moved during optimization
-                zeolite_gt_geodesic_frac = FlatTorus01.logmap(
-                    zeolite_initial_coords, zeolite_target_coords
-                )
-                zeolite_gt_geodesic_cart = torch.matmul(zeolite_gt_geodesic_frac, lattice)
-                zeolite_gt_distance_cart = (zeolite_gt_geodesic_cart**2).sum(-1).sqrt()
+            # Next, we calculate the ground truth rmsd for the zeolite, i.e. how much the atoms have moved during optimization
+            zeolite_gt_geodesic_frac = FlatTorus01.logmap(
+                zeolite_initial_coords, zeolite_target_coords
+            )
+            zeolite_gt_geodesic_cart = torch.matmul(zeolite_gt_geodesic_frac, lattice)
+            zeolite_gt_distance_cart = (zeolite_gt_geodesic_cart**2).sum(-1).sqrt()
 
-                zeolite_gt_rmsd = (zeolite_gt_distance_cart**2).mean().sqrt()
-                zeolite_gt_rmsds.append(zeolite_gt_rmsd)
-            else:
-                zeolite_rmsds.append(torch.tensor(0.0))
-                zeolite_gt_rmsds.append(torch.tensor(0.0))
+            zeolite_gt_rmsd = (zeolite_gt_distance_cart**2).mean().sqrt()
 
             osda["rmsd"] = osda_rmsd
             zeolite["rmsd"] = zeolite_rmsd
