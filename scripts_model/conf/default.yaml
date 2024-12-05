@@ -55,6 +55,7 @@ train:
     gradient_clip_val: 100
     gradient_clip_algorithm: value
     profiler: simple
+    strategy: ddp
 
   monitor_metric: "val/loss"  # "val/nll"
   monitor_metric_mode: min

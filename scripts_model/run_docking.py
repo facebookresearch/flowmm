@@ -171,6 +171,10 @@ def run(cfg: DictConfig) -> None:
         ckpt = None
 
     hydra.utils.log.info("Instantiating the Trainer")
+    if cfg.train.pl_trainer.strategy == "ddp":
+        strategy = DDPStrategy(find_unused_parameters=False)
+    else:
+        strategy = None
     trainer = pl.Trainer(
         # default_root_dir=hydra_dir,
         logger=wandb_logger,
@@ -179,7 +183,7 @@ def run(cfg: DictConfig) -> None:
         check_val_every_n_epoch=cfg.logging.val_check_interval,
         # progress_bar_refresh_rate=cfg.logging.progress_bar_refresh_rate,
         resume_from_checkpoint=ckpt,
-        strategy=DDPStrategy(find_unused_parameters=False),
+        strategy=strategy,
         **cfg.train.pl_trainer,
     )
 
