@@ -1,5 +1,5 @@
 cost_coord: 1.
-cost_be: 1.
+cost_be: 0.
 affine_combine_costs: true
 target_distribution: unconditional
 self_cond: false
